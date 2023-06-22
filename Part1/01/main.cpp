@@ -85,3 +85,147 @@ static ByteBuffer read_bytes(fs::path const& path)
     file.close();
     return buffer;
 }
+
+
+static int parse_opcode(u8 byte)
+{
+    return (byte & 0b11111100) >> 2;
+}
+
+
+static int parse_direction(u8 byte)
+{
+    return (byte & 0b00000010) >> 1;
+}
+
+
+static int parse_word(u8 byte)
+{
+    return byte & 0b00000001;
+}
+
+
+static int parse_mode(u8 byte)
+{
+    return (byte & 0b11100000) >> 5;
+}
+
+
+static int parse_register(u8 byte)
+{
+    return (byte & 0b00111000) >> 3;
+}
+
+
+static int parse_register_memory(u8 byte)
+{
+    return byte & 0b00000111;
+}
+
+
+static char* decode_opcode(int opcode)
+{
+    switch (opcode)
+    {
+        case 0b00100010: return "mov";
+    }
+
+    return  "???";
+}
+
+
+static char* decode_register(int reg, int word)
+{
+    if (word)
+    {
+        switch (reg)
+        {
+        case 0: return "AX";
+        case 1: return "CX";
+        case 2: return "DX";
+        case 3: return "BX";
+        case 4: return "SP";
+        case 5: return "BP";
+        case 6: return "SI";
+        case 7: return "DI";
+        }
+    }
+    else
+    {
+        switch (reg)
+        {
+        case 0: return "AL";
+        case 1: return "CL";
+        case 2: return "DL";
+        case 3: return "BL";
+        case 4: return "AH";
+        case 5: return "CH";
+        case 6: return "DH";
+        case 7: return "BH";
+        }
+    }
+
+    return "???";
+}
+
+
+static char* decode_register_memory(int rm, int word, int mode)
+{
+    switch (mode)
+    {
+        case 0: return "mode?";
+        case 1: return "mode?";
+        case 2: return "mode?";
+        case 3: return decode_register(rm, word);
+    }
+}
+
+
+static void decode(const char* bin_file)
+{
+    auto buffer = read_bytes(bin_file);
+
+    auto byte1 = buffer.data[0];
+    auto byte2 = buffer.data[1];
+    destroy_buffer(buffer);
+
+    int opcode = parse_opcode(byte1);
+    int direction = parse_direction(byte1);
+    int word = parse_word(byte1);
+    int mode = parse_mode(byte2);
+    int reg = parse_register(byte2);
+    int rm = parse_register_memory(byte2);
+
+
+    std::ofstream out("out_0037.asm");
+    if (!out.is_open())
+    {
+        return;
+    }    
+
+    char* op = decode_opcode(opcode);
+    char* src = "src?";
+    char* dst = "dst?";
+
+    if (direction)
+    {
+        src = decode_register_memory(rm, word, mode);
+        dst = decode_register(reg, word);
+    }
+    else
+    {
+        src = decode_register(reg, word);
+        dst = decode_register_memory(rm, word, mode);
+    }
+
+    out << "bits 16\n\n";
+    out << decode_opcode(opcode) << ' ' << dst << ", " << src << '\n';
+
+    out.close();
+}
+
+
+int main()
+{
+    decode(BIN_FILE);
+}
