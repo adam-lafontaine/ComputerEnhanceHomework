@@ -1,0 +1,19 @@
+OPCODE DW  MOD REG RM
+000000 00  00  000 000
+
+
+D
+0 = RM dst
+1 = REG dst
+
+W
+0 = 8bit
+1 - 16bit
+
+MOD
+00 = 
+01 = 
+10 = 
+11 = 
+
+mov = 100010
