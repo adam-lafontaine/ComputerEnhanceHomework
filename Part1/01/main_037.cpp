@@ -17,6 +17,7 @@ using u64 = uint64_t;
 using i64 = int64_t;
 using f32 = float;
 using f64 = double;
+using cstr = const char*;
 
 
 class ByteBuffer
@@ -107,7 +108,7 @@ static int parse_word(u8 byte)
 
 static int parse_mode(u8 byte)
 {
-    return (byte & 0b11100000) >> 5;
+    return (byte & 0b11000000) >> 6;
 }
 
 
@@ -123,65 +124,85 @@ static int parse_register_memory(u8 byte)
 }
 
 
-static char* decode_opcode(int opcode)
+static cstr decode_opcode(int opcode)
 {
     switch (opcode)
     {
         case 0b00100010: return "mov";
     }
 
-    return  "???";
+    return  "opcode?";
 }
 
 
-static char* decode_register(int reg, int word)
+static cstr decode_register(int reg, int word)
 {
     if (word)
     {
         switch (reg)
         {
-        case 0: return "AX";
-        case 1: return "CX";
-        case 2: return "DX";
-        case 3: return "BX";
-        case 4: return "SP";
-        case 5: return "BP";
-        case 6: return "SI";
-        case 7: return "DI";
+        case 0: return "ax";
+        case 1: return "cx";
+        case 2: return "dx";
+        case 3: return "bx";
+        case 4: return "sp";
+        case 5: return "bp";
+        case 6: return "si";
+        case 7: return "di";
         }
     }
     else
     {
         switch (reg)
         {
-        case 0: return "AL";
-        case 1: return "CL";
-        case 2: return "DL";
-        case 3: return "BL";
-        case 4: return "AH";
-        case 5: return "CH";
-        case 6: return "DH";
-        case 7: return "BH";
+        case 0: return "al";
+        case 1: return "cl";
+        case 2: return "dl";
+        case 3: return "bl";
+        case 4: return "ah";
+        case 5: return "ch";
+        case 6: return "dh";
+        case 7: return "bh";
         }
     }
 
-    return "???";
+    return "register?";
 }
 
 
-static char* decode_register_memory(int rm, int word, int mode)
+static cstr decode_register_memory(int rm, int word, int mode)
 {
     switch (mode)
     {
-        case 0: return "mode?";
-        case 1: return "mode?";
-        case 2: return "mode?";
+        case 0: return "mode0?";
+        case 1: return "mode1?";
+        case 2: return "mode2?";
         case 3: return decode_register(rm, word);
     }
+
+    return "mode?";
 }
 
 
-static void decode(const char* bin_file)
+static void print_instruction(cstr op, cstr src, cstr dst)
+{
+    /*std::ofstream out("out_0037.asm");
+    if (!out.is_open())
+    {
+        return;
+    }
+
+    out << "bits 16\n\n";
+    out << op << ' ' << dst << ", " << src << '\n';
+
+    out.close();
+*/
+    printf("bits 16\n\n");
+    printf("%s %s, %s\n", op, dst, src);
+}
+
+
+static void decode(cstr bin_file)
 {
     auto buffer = read_bytes(bin_file);
 
@@ -196,21 +217,15 @@ static void decode(const char* bin_file)
     int reg = parse_register(byte2);
     int rm = parse_register_memory(byte2);
 
-
-    std::ofstream out("out_0037.asm");
-    if (!out.is_open())
-    {
-        return;
-    }    
-
-    char* op = decode_opcode(opcode);
-    char* src = "src?";
-    char* dst = "dst?";
+    auto op = decode_opcode(opcode);
+    auto src = "src?";
+    auto dst = "dst?";    
 
     if (direction)
     {
         src = decode_register_memory(rm, word, mode);
         dst = decode_register(reg, word);
+        printf("D=1");
     }
     else
     {
@@ -218,13 +233,10 @@ static void decode(const char* bin_file)
         dst = decode_register_memory(rm, word, mode);
     }
 
-    out << "bits 16\n\n";
-    out << decode_opcode(opcode) << ' ' << dst << ", " << src << '\n';
-
-    out.close();
+    print_instruction(op, src, dst);
 }
 
-
+// g++-11 -o decode -c main.cpp
 int main()
 {
     decode(BIN_FILE);
