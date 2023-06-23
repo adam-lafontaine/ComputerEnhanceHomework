@@ -96,16 +96,6 @@ enum class OpCode : int
 };
 
 
-enum class Mode : int
-{
-    mem = 0,
-    mem_8 = 1,
-    mem_16 = 2,
-    reg = 3,
-    none = -1
-};
-
-
 enum class Register : int
 {
     // W = 0
@@ -399,68 +389,12 @@ static OpCode parse_opcode(u8 byte)
 }
 
 
-static void decode_mov_m8_r(u8 byte1, u8 byte2)
-{
-    auto d = byte1 & 0b0000'0010;
-    auto w = byte1 & 0b0000'0001;
-
-    int src_bits3 = 0;
-    int dst_bits3 = 0;
-
-    auto src = "src?";
-    auto dst = "dst?";
-
-    if (d)
-    {
-        src_bits3 = byte2 & 0b00'000'111;
-        dst_bits3 = (byte2 & 0b00'111'000) >> 3;
-
-        dst = decode_register(dst_bits3, w);
-    }
-    else
-    {
-        src_bits3 = (byte2 & 0b00'111'000) >> 3;
-        dst_bits3 = byte2 & 0b00'000'111;
-
-        src = decode_register(src_bits3, w);
-    }
-
-    printf("mov %s, %s\n", dst, src);
-}
-
-
-static void decode_mov_r_r(u8 byte1, u8 byte2)
-{
-    auto d = byte1 & 0b0000'0010;
-    auto w = byte1 & 0b0000'0001;
-
-    int src_bits3 = 0;
-    int dst_bits3 = 0;
-
-    if (d)
-    {
-        src_bits3 = byte2 & 0b00'000'111;
-        dst_bits3 = (byte2 & 0b00'111'000) >> 3;
-    }
-    else
-    {
-        src_bits3 = (byte2 & 0b00'111'000) >> 3;
-        dst_bits3 = byte2 & 0b00'000'111;
-    }
-
-    auto src = decode_register(src_bits3, w);
-    auto dst = decode_register(dst_bits3, w);
-
-    printf("mov %s, %s\n", dst, src);
-}
-
-
 static int decode_mov_rm_tf_r(u8* data, int offset)
 {
     auto byte1 = data[offset];
     auto byte2 = data[offset + 1];
 
-    auto d = byte1 & 0b0000'0010;
+    auto d_bits1 = (byte1 & 0b0000'0010) >> 1;
     auto w_bits1 = byte1 & 0b0000'0001;
 
     auto mod_bits2 = (byte2 & 0b1100'0000) >> 6;
@@ -475,26 +409,28 @@ static int decode_mov_rm_tf_r(u8* data, int offset)
     int disp = 0;
     offset += 2;
 
+    auto byte3 = data[offset];
+
     switch (rm_disp)
     {
     case 1:
-        disp = (int)(data[offset]);
+        disp = (int)byte3;
         offset += 1;
         break;
     case 2:
-        disp = (int)(u16)(*(data + offset));
+        auto byte4 = data[offset + 1];
+        disp = (byte4 << 8) + byte3;
         offset += 2;
         break;
     }
 
     char rm_str[20] = { 0 };
-
     print_register_memory(rm, disp, rm_str);
 
     auto src = "src?";
     auto dst = "dst?";
 
-    if (d)
+    if (d_bits1)
     {
         src = rm_str;
         dst = reg_str;
@@ -505,52 +441,114 @@ static int decode_mov_rm_tf_r(u8* data, int offset)
         dst = rm_str;
     }
 
-    printf("mov %s, %s", dst, src);
+    printf("mov %s, %s\n", dst, src);
 
     return offset;
 }
 
 
-static int decode_i_to_rm(u8* data, OpCode opcode, Width width, int offset)
+static int decode_mov_i_to_rm(u8* data, int offset)
 {
     auto byte1 = data[offset];
     auto byte2 = data[offset + 1];
 
-    auto mode = parse_mode(byte1, opcode);
+    auto w_bits1 = byte1 & 0b0000'0001;
+    auto mod_bits2 = (byte2 & 0b1100'0000) >> 6;
+    auto rm_bits3 = byte2 & 0b0000'0111;
 
-    switch (mode)
+    auto rm = calc_rm(w_bits1, mod_bits2, rm_bits3);
+    auto rm_disp = decode_rm_disp(rm);
+
+    int disp = 0;
+    offset += 2;
+
+    auto byte3 = data[offset];
+
+    switch (rm_disp)
     {
-    case Mode::mem:
+    case 1:
+        disp = (int)byte3;
+        offset += 1;
         break;
-    case Mode::mem_8:
-        break;
-    case Mode::mem_16:
-        break;
-    case Mode::reg:
-        break;    
-    default:
+    case 2:
+        auto byte4 = data[offset + 1];
+        disp = (byte4 << 8) + byte3;
+        offset += 2;
         break;
     }
+
+    char rm_str[20] = { 0 };
+    print_register_memory(rm, disp, rm_str);
+
+    int im_data = (int)(data[offset]);
+    offset += 1;
+
+    if (w_bits1)
+    {
+        im_data += (data[offset] << 8);
+        offset += 1;
+    }
+
+    char src[6] = { 0 };
+    snprintf(src, 6, "%d", im_data);
+
+    auto dst = rm_str;
+
+    printf("mov %s, %s\n", dst, src);
 
     return offset;
 }
 
 
-static int decode_i_to_r()
+static int decode_mov_i_to_r(u8* data, int offset)
 {
+    auto byte1 = data[offset];
 
+    auto w_bits1 = (byte1 & 0b0000'1000) >> 3;
+    auto reg_bits3 = byte1 & 0b0000'0111;
+
+    offset += 1;
+    int im_data = (int)(data[offset]);
+    
+    if (w_bits1)
+    {
+        im_data += (data[offset] << 8);
+        offset += 1;
+    }
+
+    char src[6] = { 0 };
+    snprintf(src, 6, "%d", im_data);
+
+    auto dst = decode_register(reg_bits3, w_bits1);
+
+    printf("mov %s, %s\n", dst, src);
+
+    return offset;
 }
 
 
-static int decode_m_to_a()
+static int decode_mov_m_to_a(u8* data, int offset)
 {
+    auto byte1 = data[offset];
+    auto byte2 = data[offset + 1];
 
+    auto src = "src?";
+    auto dst = "dst?";
+
+    printf("mov %s, %s\n", dst, src);
+
+    return offset;
 }
 
 
-static int decode_a_to_m()
+static int decode_mov_a_to_m(u8* data, int offset)
 {
+    auto src = "src?";
+    auto dst = "dst?";
 
+    printf("mov %s, %s\n", dst, src);
+
+    return offset;
 }
 
 
@@ -565,19 +563,19 @@ static int decode_next(u8* data, int offset)
     switch (opcode)
     {
     case OC::mov_rm_tf_r:
-        offset = decode_mov_rm_tf_r(data, opcode, offset);
+        offset = decode_mov_rm_tf_r(data, offset);
         break;
     case OC::mov_i_to_rm:
-
+        offset = decode_mov_i_to_rm(data, offset);
         break;
     case OC::mov_i_to_r:
-
+        offset = decode_mov_i_to_r(data, offset);
         break;
     case OC::mov_m_to_a:
-
+        offset = decode_mov_m_to_a(data, offset);
         break;
     case OC::mov_a_to_m:
-
+        offset = decode_mov_a_to_m(data, offset);
         break;
     default:
         printf("opcode: %d\n", (int)opcode);
