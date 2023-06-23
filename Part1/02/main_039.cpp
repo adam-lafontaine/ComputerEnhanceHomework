@@ -96,22 +96,6 @@ enum class OpCode : int
 };
 
 
-enum class Dir : int
-{
-    to_r = 1,
-    from_r = 0,
-    none = -1
-};
-
-
-enum class Width : int
-{
-    byte = 0,
-    word = 1,
-    none = -1
-};
-
-
 enum class Mode : int
 {
     mem = 0,
@@ -146,6 +130,39 @@ enum class Register : int
 
     none = -1
 };
+
+
+static cstr decode_register(int reg_bits3, int w)
+{
+    using R = Register;
+
+    assert(reg_bits3 >= 0);
+    assert(reg_bits3 < 8);
+
+    auto reg = (R)(w ? reg_bits3 + 8 : reg_bits3);
+
+    switch (reg)
+    {
+    case R::AL: return "al";
+    case R::CL: return "cl";
+    case R::DL: return "dl";
+    case R::BL: return "bl";
+    case R::AH: return "ah";
+    case R::CH: return "ch";
+    case R::DH: return "dh";
+    case R::BH: return "bh";
+    case R::AX: return "ax";
+    case R::CX: return "cx";
+    case R::DX: return "dx";
+    case R::BX: return "bx";
+    case R::SP: return "sp";
+    case R::BP: return "bp";
+    case R::SI: return "si";
+    case R::DI: return "di";
+    }
+
+    return "reg?";
+}
 
 
 enum class RegisterMemory : int
@@ -265,11 +282,40 @@ static cstr decode_register_memory(RegisterMemory rm)
 }
 
 
-static void print_register_memory(int w_bits1, int mod_bits2, int rm_bits3, int disp, char* dst)
+static int decode_rm_disp(RegisterMemory rm)
 {
     using RM = RegisterMemory;
 
-    auto rm = calc_rm(w_bits1, mod_bits2, rm_bits3);
+    auto rm_int = (int)rm;
+
+    if (rm_int == (int)RM::mod_00_rm_110)
+    {
+        return 2;
+    }
+
+    if (rm_int <= (int)RM::mod_00_rm_111)
+    {
+        return 0;
+    }
+
+    if (rm_int <= (int)RM::mod_01_rm_111)
+    {
+        return 1;
+    }
+
+    if (rm_int <= (int)RM::mod_10_rm_111)
+    {
+        return 2;
+    }
+
+    return 0;
+}
+
+
+static void print_register_memory(RegisterMemory rm, int disp, char* dst)
+{
+    using RM = RegisterMemory;
+    
     auto rm_int = (int)rm;
 
     auto rm_str = decode_register_memory(rm);
@@ -285,17 +331,17 @@ static void print_register_memory(int w_bits1, int mod_bits2, int rm_bits3, int 
 
     // register
     if (rm_int >= (int)RM::mod_11_rm_000)
-    {
-        
+    {        
         snprintf(dst, len, "%s", rm_str);
         return;
     }
 
     // direct address
-    if (rm_int == (int)RM::mod_00_rm_110)
+    if (rm == RM::mod_00_rm_110)
     {
-        
-        
+        char buffer[6] = { 0 };
+        snprintf(buffer, 6, "%d", disp);
+        snprintf(dst, 8, "[%s]", buffer);
         return;
     }
 
@@ -306,17 +352,12 @@ static void print_register_memory(int w_bits1, int mod_bits2, int rm_bits3, int 
         return;
     }
 
-    // Source address calculation, 8 bit displacement
-    /*if (rm_int <= (int)RM::mod_01_rm_111)
-    {        
-        snprintf(dst, len + 2, "[%s %d]", rm_str, disp);
-        return;
-    }*/
-
     // Source address calculation, 8 or 16 bit displacement
     if (rm_int <= (int)RM::mod_10_rm_111)
     {        
-        snprintf(dst, len + 2, "[%s %d]", rm_str, disp);
+        char buffer[6] = { 0 };
+        snprintf(buffer, 6, "%d", disp);
+        snprintf(dst, len + 8, "[%s %s]", rm_str, buffer);
         return;
     }
 
@@ -355,106 +396,6 @@ static OpCode parse_opcode(u8 byte)
     }
 
     return OC::none;
-}
-
-/*
-static Dir parse_dir(u8 byte, OpCode opcode)
-{
-    if (opcode != OpCode::rm_tf_r)
-    {
-        return Dir::none;
-    }
-
-    if (byte & 0b0000'0010)
-    {
-        return Dir::to_r;
-    }
-
-    return Dir::from_r;
-}
-
-
-static Width parse_width(u8 byte, OpCode opcode)
-{
-    switch (opcode)
-    {
-    case OpCode::rm_tf_r:
-    case OpCode::i_to_rm:
-    case OpCode::m_to_a:
-    case OpCode::a_to_m:
-        return byte & 0b0000'0001 ? Width::word : Width::byte;
-    
-    case OpCode::i_to_r:
-        return byte & 0b0000'1000 ? Width::word : Width::byte;
-    }
-
-    return Width::none;
-}
-*/
-
-static Mode parse_mode(u8 byte2, OpCode opcode)
-{
-    using OC = OpCode;
-
-    switch (opcode)
-    {
-    case OC::mov_rm_tf_r:
-    case OC::mov_i_to_rm:
-        return (Mode)((byte2 & 0b1100'0000) >> 6);
-    }
-
-    return Mode::none;
-}
-
-
-static cstr decode_register(int bits3, int w)
-{
-    using R = Register;
-
-    assert (bits3 >= 0);
-    assert(bits3 < 8);
-
-    auto reg = (R)(w ? bits3 + 8 : bits3);
-
-    switch (reg)
-    {
-    case R::AL: return "al";
-    case R::CL: return "cl";
-    case R::DL: return "dl";
-    case R::BL: return "bl";
-    case R::AH: return "ah";
-    case R::CH: return "ch";
-    case R::DH: return "dh";
-    case R::BH: return "bh";
-    case R::AX: return "ax";
-    case R::CX: return "cx";
-    case R::DX: return "dx";
-    case R::BX: return "bx";
-    case R::SP: return "sp";
-    case R::BP: return "bp";
-    case R::SI: return "si";
-    case R::DI: return "di";
-    }
-
-    return "reg?";
-}
-
-
-static cstr decode_rm(Mode mod, int bits3, int w)
-{
-    switch (mod)
-    {
-    case Mode::mem:
-        break;
-    case Mode::mem_8:
-        break;
-    case Mode::mem_16:
-        break;
-    case Mode::reg:
-        return decode_register(bits3, w);
-    default:
-        break;
-    }
 }
 
 
@@ -514,28 +455,57 @@ static void decode_mov_r_r(u8 byte1, u8 byte2)
 }
 
 
-static int decode_mov_rm_tf_r(u8* data, OpCode opcode, int offset)
+static int decode_mov_rm_tf_r(u8* data, int offset)
 {
     auto byte1 = data[offset];
     auto byte2 = data[offset + 1];
 
-    auto mode = parse_mode(byte1, opcode);
+    auto d = byte1 & 0b0000'0010;
+    auto w_bits1 = byte1 & 0b0000'0001;
 
-    switch (mode)
+    auto mod_bits2 = (byte2 & 0b1100'0000) >> 6;
+    auto reg_bits3 = (byte2 & 0b0011'1000) >> 3;
+    auto rm_bits3 = byte2 & 0b0000'0111;
+
+    auto reg_str = decode_register(reg_bits3, w_bits1);
+
+    auto rm = calc_rm(w_bits1, mod_bits2, rm_bits3);
+    auto rm_disp = decode_rm_disp(rm);
+
+    int disp = 0;
+    offset += 2;
+
+    switch (rm_disp)
     {
-    case Mode::mem:
+    case 1:
+        disp = (int)(data[offset]);
+        offset += 1;
         break;
-    case Mode::mem_8:
-        break;
-    case Mode::mem_16:
-        break;
-    case Mode::reg:
-        decode_mov_r_r(byte1, byte2);
+    case 2:
+        disp = (int)(u16)(*(data + offset));
         offset += 2;
-        break;    
-    default:
         break;
     }
+
+    char rm_str[20] = { 0 };
+
+    print_register_memory(rm, disp, rm_str);
+
+    auto src = "src?";
+    auto dst = "dst?";
+
+    if (d)
+    {
+        src = rm_str;
+        dst = reg_str;
+    }
+    else
+    {
+        src = reg_str;
+        dst = rm_str;
+    }
+
+    printf("mov %s, %s", dst, src);
 
     return offset;
 }
