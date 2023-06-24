@@ -8,8 +8,7 @@ exe := $(build)/decode
 # main
 main_dep :=
 
-main_c := main_039.cpp
-#main_c := main_040.cpp
+main_c := main_039_040.cpp
 main_o := $(build)/main.o
 object_files := $(main_o)
 

@@ -220,24 +220,27 @@ static cstr decode_register_memory(RegisterMemory rm)
     case RM::mod_00_rm_110: return "DIRECT ADDRESS";
     case RM::mod_00_rm_111: return "bx";
 
-    case RM::mod_01_rm_000: return "bx + si +";
-    case RM::mod_01_rm_001: return "bx + di +";
-    case RM::mod_01_rm_010: return "bp + si +";
-    case RM::mod_01_rm_011: return "bp + di +";
-    case RM::mod_01_rm_100: return "si +";
-    case RM::mod_01_rm_101: return "di +";
-    case RM::mod_01_rm_110: return "bp +";
-    case RM::mod_01_rm_111: return "bx +";
+    // 8 bit displacement
+    case RM::mod_01_rm_000: return "bx + si";
+    case RM::mod_01_rm_001: return "bx + di";
+    case RM::mod_01_rm_010: return "bp + si";
+    case RM::mod_01_rm_011: return "bp + di";
+    case RM::mod_01_rm_100: return "si";
+    case RM::mod_01_rm_101: return "di";
+    case RM::mod_01_rm_110: return "bp";
+    case RM::mod_01_rm_111: return "bx";
 
-    case RM::mod_10_rm_000: return "bx + si +";
-    case RM::mod_10_rm_001: return "bx + di +";
-    case RM::mod_10_rm_010: return "bp + si +";
-    case RM::mod_10_rm_011: return "bp + di +";
-    case RM::mod_10_rm_100: return "si +";
-    case RM::mod_10_rm_101: return "di +";
-    case RM::mod_10_rm_110: return "bp +";
-    case RM::mod_10_rm_111: return "bx +";
+    // 16 bit displacement
+    case RM::mod_10_rm_000: return "bx + si";
+    case RM::mod_10_rm_001: return "bx + di";
+    case RM::mod_10_rm_010: return "bp + si";
+    case RM::mod_10_rm_011: return "bp + di";
+    case RM::mod_10_rm_100: return "si";
+    case RM::mod_10_rm_101: return "di";
+    case RM::mod_10_rm_110: return "bp";
+    case RM::mod_10_rm_111: return "bx";
 
+    // register, w = 0
     case RM::mod_11_rm_000: return "al";
     case RM::mod_11_rm_001: return "cl";
     case RM::mod_11_rm_010: return "dl";
@@ -247,6 +250,7 @@ static cstr decode_register_memory(RegisterMemory rm)
     case RM::mod_11_rm_110: return "dh";
     case RM::mod_11_rm_111: return "bh";
 
+    // register, w = 1
     case RM::mod_11_rm_000_w: return "ax";
     case RM::mod_11_rm_001_w: return "cx";
     case RM::mod_11_rm_010_w: return "dx";
@@ -318,9 +322,9 @@ static void print_register_memory(RegisterMemory rm, int disp, char* dst)
     // direct address
     if (rm == RM::mod_00_rm_110)
     {
-        char buffer[6] = { 0 };
-        snprintf(buffer, 6, "%d", disp);
-        snprintf(dst, 8, "[%s]", buffer);
+        char buffer[7] = { 0 };
+        snprintf(buffer, 7, "%d", disp);
+        snprintf(dst, 9, "[%s]", buffer);
         return;
     }
 
@@ -334,22 +338,23 @@ static void print_register_memory(RegisterMemory rm, int disp, char* dst)
     // Source address calculation, 8 or 16 bit displacement
     if (rm_int <= (int)RM::mod_10_rm_111)
     {        
-        char buffer[6] = { 0 };
+        char buffer[7] = { 0 };
 
         if (disp < 0)
         {
-
+            snprintf(buffer, 7, "%d", -1 * disp);
+            snprintf(dst, len + 8, "[%s + %s]", rm_str, buffer);
         }
         else if (disp > 0)
         {
-
+            snprintf(buffer, 7, "%d", disp);
+            snprintf(dst, len + 11, "[%s + %s]", rm_str, buffer);
         }
         else
         {
-            
+            snprintf(dst, len + 11, "[%s]", rm_str);
         }
-        snprintf(buffer, 6, "%d", disp);
-        snprintf(dst, len + 8, "[%s %s]", rm_str, buffer);
+        
         return;
     }
 
