@@ -21,6 +21,19 @@ using f64 = double;
 using cstr = const char*;
 
 
+#define PRINTDBG
+
+
+static void printdbg(cstr msg)
+{
+#ifdef PRINTDBG
+
+printf("%s", msg);
+
+#endif
+}
+
+
 class ByteBuffer
 {
 public:
@@ -398,7 +411,7 @@ static OpCode parse_opcode(u8 byte)
     {
         return OC::mov_m_to_a;
     }
-    else if (top7 == (int)OC::mov_m_to_a)
+    else if (top7 == (int)OC::mov_a_to_m)
     {
         return OC::mov_a_to_m;
     }
@@ -409,6 +422,8 @@ static OpCode parse_opcode(u8 byte)
 
 static int decode_mov_rm_tf_r(u8* data, int offset)
 {
+    printdbg("mov_rm_tf_r: ");
+
     auto byte1 = data[offset];
     auto byte2 = data[offset + 1];
 
@@ -467,6 +482,8 @@ static int decode_mov_rm_tf_r(u8* data, int offset)
 
 static int decode_mov_i_to_rm(u8* data, int offset)
 {
+    printdbg("mov_i_to_rm: ");
+
     auto byte1 = data[offset];
     auto byte2 = data[offset + 1];
 
@@ -478,6 +495,7 @@ static int decode_mov_i_to_rm(u8* data, int offset)
     auto rm_disp = decode_rm_disp(rm);
 
     int disp = 0;
+    auto disp_str = "byte";
     offset += 2;
 
     auto byte3 = data[offset];
@@ -491,6 +509,7 @@ static int decode_mov_i_to_rm(u8* data, int offset)
     case 2:
         auto byte4 = data[offset + 1];
         disp = (byte4 << 8) + byte3;
+        disp_str = "word";
         offset += 2;
         break;
     }
@@ -512,7 +531,7 @@ static int decode_mov_i_to_rm(u8* data, int offset)
 
     auto dst = rm_str;
 
-    printf("mov %s, %s\n", dst, src);
+    printf("mov %s, %s %s\n", dst, disp_str, src);
 
     return offset;
 }
@@ -520,6 +539,8 @@ static int decode_mov_i_to_rm(u8* data, int offset)
 
 static int decode_mov_i_to_r(u8* data, int offset)
 {
+    printdbg("mov_i_to_r:  ");
+
     auto byte1 = data[offset];
 
     auto w_bits1 = (byte1 & 0b0000'1000) >> 3;
@@ -548,11 +569,26 @@ static int decode_mov_i_to_r(u8* data, int offset)
 
 static int decode_mov_m_to_a(u8* data, int offset)
 {
-    auto byte1 = data[offset];
-    auto byte2 = data[offset + 1];
+    printdbg("mov_m_to_a:  ");
 
-    auto src = "src?";
-    auto dst = "dst?";
+    auto byte1 = data[offset];
+
+    auto w_bits1 = byte1 & 0b0000'0001;
+
+    int addr = (int)(data[offset + 1]);
+
+    if (w_bits1)
+    {
+        addr += (data[offset + 2] << 8);
+        offset += 1;
+    }
+
+    offset += 2;
+
+    char src[8] = { 0 };
+    snprintf(src, 8, "[%d]", addr);
+
+    auto dst = "ax";
 
     printf("mov %s, %s\n", dst, src);
 
@@ -562,8 +598,26 @@ static int decode_mov_m_to_a(u8* data, int offset)
 
 static int decode_mov_a_to_m(u8* data, int offset)
 {
-    auto src = "src?";
-    auto dst = "dst?";
+    printdbg("mov_a_to_m:  ");
+
+    auto byte1 = data[offset];
+
+    auto w_bits1 = byte1 & 0b0000'0001;
+
+    int addr = (int)(data[offset + 1]);
+
+    if (w_bits1)
+    {
+        addr += (data[offset + 2] << 8);
+        offset += 1;
+    }
+
+    offset += 2;
+
+    auto src = "ax";
+
+    char dst[8] = { 0 };
+    snprintf(dst, 8, "[%d]", addr);
 
     printf("mov %s, %s\n", dst, src);
 
@@ -578,11 +632,10 @@ static int decode_next(u8* data, int offset)
     auto byte = data[offset];
 
     auto opcode = parse_opcode(byte);
-    //printf("opcode %d\n", (int)opcode);
 
     switch (opcode)
     {
-    case OC::mov_rm_tf_r:
+    case OC::mov_rm_tf_r:        
         offset = decode_mov_rm_tf_r(data, offset);
         break;
     case OC::mov_i_to_rm:
@@ -598,7 +651,7 @@ static int decode_next(u8* data, int offset)
         offset = decode_mov_a_to_m(data, offset);
         break;
     default:
-        printf("opcode: %d\n", (int)data[offset]);
+        printf("opcode (byte1): %d\n", (int)data[offset]);
         return -1;
     }
 
@@ -606,13 +659,11 @@ static int decode_next(u8* data, int offset)
 }
 
 
-
-constexpr auto BIN_FILE = "listing_0039_more_movs";
-
-
-int main()
+static void decode(cstr bin_file)
 {
-    auto buffer = read_bytes(BIN_FILE);
+    printf("\n==================\n\n");
+
+    auto buffer = read_bytes(bin_file);
 
     assert(buffer.data);
     assert(buffer.size);
@@ -626,4 +677,14 @@ int main()
     }
 
     destroy_buffer(buffer);
+
+    printf("\n\n------------------\n");
+}
+
+
+int main()
+{
+    decode("listing_0039_more_movs");
+
+    decode("listing_0040_challenge_movs");
 }
