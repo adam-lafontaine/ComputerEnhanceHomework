@@ -34,6 +34,45 @@ printf("%s", msg);
 }
 
 
+void print_binary(uint8_t value) 
+{
+    printf("[");
+    for (int i = 7; i >= 0; --i) 
+    {
+        printf("%d", (value >> i) & 1);
+    }
+    printf("]");
+}
+
+
+static void printdbg(cstr msg, u8 byte1, u8 byte2)
+{
+#ifdef PRINTDBG
+
+printf("%s ", msg);
+print_binary(byte1);
+print_binary(byte2);
+printf(" ");
+
+#endif
+}
+
+
+static void printdbg(cstr msg, u8 byte1, u8 byte2, u8 byte3, u8 byte4)
+{
+#ifdef PRINTDBG
+
+printf("%s ", msg);
+print_binary(byte1);
+print_binary(byte2);
+print_binary(byte3);
+print_binary(byte4);
+printf(" ");
+
+#endif
+}
+
+
 namespace Bytes
 {
     class Buffer
@@ -287,7 +326,15 @@ namespace RegMem
     }
 
 
-    static int decode_disp(RegMem::Name rm)
+    static bool is_reg(RegMem::Name rm)
+    {
+        using RM = RegMem::Name;
+
+        return (int)rm >= (int)RM::mod_11_rm_000;
+    }
+
+
+    static int decode_disp_sz(RegMem::Name rm)
     {
         using RM = RegMem::Name;
 
@@ -374,7 +421,7 @@ namespace RegMem
             }
             else
             {
-                snprintf(dst, len + 11, "[%s]", rm_str);
+                snprintf(dst, len + 11, "[%s + 0]", rm_str);
             }
             
             return;
@@ -468,7 +515,7 @@ namespace OpCode
         }
         else if (top6 == 0b0010'0000)
         {
-            auto bits3 = (byte2 && 0b00'111'000) >> 3;
+            auto bits3 = (byte2 & 0b00'111'000) >> 3;
             if (bits3 == 0b00000'000)
             {
                 return OC::add_i_rm;
@@ -488,17 +535,18 @@ namespace OpCode
 }
 
 
-namespace MOV
+namespace CMD
 {
     namespace R = Reg;
     namespace RM = RegMem;
 
-    static int rm_r(u8* data, int offset)
-    {
-        printdbg("mov rm_r: ");
 
+    static int rm_r(cstr cmd, u8* data, int offset)
+    {
         auto byte1 = data[offset];
         auto byte2 = data[offset + 1];
+        auto byte3 = data[offset + 2];
+        auto byte4 = data[offset + 3];
 
         auto d_bits1 = (byte1 & 0b0000'0010) >> 1;
         auto w_bits1 = byte1 & 0b0000'0001;
@@ -507,31 +555,37 @@ namespace MOV
         auto reg_bits3 = (byte2 & 0b0011'1000) >> 3;
         auto rm_bits3 = byte2 & 0b0000'0111;
 
-        auto reg_str = R::decode(reg_bits3, w_bits1);
-
         auto rm = RM::calc_rm(w_bits1, mod_bits2, rm_bits3);
-        auto rm_disp = RM::decode_disp(rm);
 
-        int disp = 0;
+        auto reg_str = R::decode(reg_bits3, w_bits1);        
         offset += 2;
 
-        auto byte3 = data[offset];
-
-        switch (rm_disp)
-        {
-        case 1:
-            disp = (int)byte3;
-            offset += 1;
-            break;
-        case 2:
-            auto byte4 = data[offset + 1];
-            disp = (byte4 << 8) + byte3;
-            offset += 2;
-            break;
-        }
-
         char rm_str[20] = { 0 };
-        RM::print(rm, disp, rm_str);
+        if (RM::is_reg(rm))
+        {
+            auto rm_r = RM::decode(rm);
+            snprintf(rm_str, strlen(rm_r) + 1, "%s", rm_r);
+        }
+        else
+        {
+            int disp = 0;
+
+            auto disp_sz = RM::decode_disp_sz(rm);
+            switch (disp_sz)
+            {
+            case 1:
+                disp = (int)byte3;
+                offset += 1;
+                
+                break;
+            case 2:
+                disp = (byte4 << 8) + byte3;
+                offset += 2;
+                break;
+            }
+
+            RM::print(rm, disp, rm_str);
+        }
 
         auto src = "src?";
         auto dst = "dst?";
@@ -547,15 +601,142 @@ namespace MOV
             dst = rm_str;
         }
 
-        printf("mov %s, %s\n", dst, src);
+        printf("%s %s, %s\n", cmd, dst, src);
+
+        /*printf("%s %s, %s", cmd, dst, src);
+        printdbg("", byte1, byte2, byte3, byte4);
+        printf("\n");*/
 
         return offset;
+    }
+
+    
+    static int i_rm(cstr cmd, u8* data, int offset)
+    {
+        auto byte1 = data[offset];
+        auto byte2 = data[offset + 1];
+        auto byte3 = data[offset + 2];
+        auto byte4 = data[offset + 3];
+
+        auto s_bits1 = (byte1 & 0b0000'0010) >> 1;
+        auto w_bits1 = byte1 & 0b0000'0001;
+        auto mod_bits2 = (byte2 & 0b1100'0000) >> 6;
+        auto rm_bits3 = byte2 & 0b0000'0111;
+
+        auto rm = RM::calc_rm(w_bits1, mod_bits2, rm_bits3);
+        
+        offset += 2;
+
+        auto disp_str = "";
+
+        auto dst = "dst?";
+
+        char rm_str[20] = { 0 };
+        if (RM::is_reg(rm))
+        {
+            dst = RM::decode(rm);
+        }
+        else
+        {
+            int disp = 0;
+
+            auto disp_sz = RM::decode_disp_sz(rm);
+            switch (disp_sz)
+            {
+            case 0:                
+                disp_str = "byte ";
+                break;
+            case 1:
+                disp = (int)byte3;
+                disp_str = "byte ";
+                offset += 1;
+                break;
+            case 2:
+                disp = (byte4 << 8) + byte3;
+                disp_str = "word ";
+                offset += 2;
+                break;
+            }
+
+            RM::print(rm, disp, rm_str);
+            dst = rm_str;
+        }
+
+        int im_data = (int)(data[offset]);
+        offset += 1;
+
+        /*if (s_bits1)
+        {
+
+        }
+
+        if (w_bits1)
+        {
+            im_data += (data[offset] << 8);
+            offset += 1;
+        }*/
+
+        char src[7] = { 0 };
+        snprintf(src, 7, "%d", im_data);
+
+        printf("%s %s%s, %s\n", cmd, disp_str, dst, src);
+
+        /*printf("%s %s%s, %s", cmd, disp_str, dst, src);
+        printdbg("", byte1, byte2, byte3, byte4);
+        printf("\n");*/
+
+        return offset;
+    }
+
+
+    static int i_ac(cstr cmd, u8* data, int offset)
+    {
+        auto byte1 = data[offset];
+
+        auto w_bits1 = byte1 & 0b0000'0001;
+        
+        int im_data = (int)(data[offset + 1]);
+        auto dst = "al";
+        
+        if (w_bits1)
+        {
+            im_data += (data[offset + 2] << 8);
+            dst = "ax";
+            offset += 1;
+        }
+
+        offset += 2;
+
+        char src[6] = { 0 };
+        snprintf(src, 6, "%d", im_data);        
+
+        printf("%s %s, %s\n", cmd, dst, src);
+
+        return offset;
+    }
+    
+}
+
+
+namespace MOV
+{
+    namespace R = Reg;
+    namespace RM = RegMem;
+
+
+    static int rm_r(u8* data, int offset)
+    {
+        printdbg("mov rm_r: ");
+
+        return CMD::rm_r("mov", data, offset);
     }
 
 
     static int i_rm(u8* data, int offset)
     {
         printdbg("mov i_rm: ");
+
+        //return CMD::i_rm("mov", data, offset);
 
         auto byte1 = data[offset];
         auto byte2 = data[offset + 1];
@@ -565,7 +746,7 @@ namespace MOV
         auto rm_bits3 = byte2 & 0b0000'0111;
 
         auto rm = RM::calc_rm(w_bits1, mod_bits2, rm_bits3);
-        auto rm_disp = RM::decode_disp(rm);
+        auto disp_sz = RM::decode_disp_sz(rm);
 
         int disp = 0;
         auto disp_str = "byte";
@@ -573,7 +754,7 @@ namespace MOV
 
         auto byte3 = data[offset];
 
-        switch (rm_disp)
+        switch (disp_sz)
         {
         case 1:
             disp = (int)byte3;
@@ -587,9 +768,6 @@ namespace MOV
             break;
         }
 
-        char rm_str[20] = { 0 };
-        RM::print(rm, disp, rm_str);
-
         int im_data = (int)(data[offset]);
         offset += 1;
 
@@ -600,7 +778,10 @@ namespace MOV
         }
 
         char src[6] = { 0 };
-        snprintf(src, 6, "%d", im_data);
+        snprintf(src, 6, "%d", im_data);        
+
+        char rm_str[20] = { 0 };
+        RM::print(rm, disp, rm_str);
 
         auto dst = rm_str;
 
@@ -702,7 +883,82 @@ namespace MOV
 
 namespace ADD
 {
+    static int rm_r(u8* data, int offset)
+    {
+        printdbg("add rm_r: ");
 
+        return CMD::rm_r("add", data, offset);
+    }
+
+
+    static int i_rm(u8* data, int offset)
+    {
+        printdbg("add i_rm: ");
+
+        return CMD::i_rm("add", data, offset);
+    }
+
+
+    static int i_ac(u8* data, int offset)
+    {
+        printdbg("add i_ac: ");
+
+        return CMD::i_ac("add", data, offset);
+    }
+}
+
+
+namespace SUB
+{
+    static int rm_r(u8* data, int offset)
+    {
+        printdbg("sub rm_r: ");    
+
+        return CMD::rm_r("sub", data, offset);
+    }
+
+
+    static int i_rm(u8* data, int offset)
+    {
+        printdbg("sub i_rm: ");
+
+        return CMD::i_rm("sub", data, offset);
+    }
+
+
+    static int i_ac(u8* data, int offset)
+    {
+        printdbg("sub i_ac: ");
+
+        return CMD::i_ac("sub", data, offset);
+    }
+}
+
+
+namespace CMP
+{
+    static int rm_r(u8* data, int offset)
+    {
+        printdbg("cmp rm_r: ");
+
+        return CMD::rm_r("cmp", data, offset);
+    }
+
+
+    static int i_rm(u8* data, int offset)
+    {
+        printdbg("cmp i_rm: ");
+
+        return CMD::i_rm("cmp", data, offset);
+    }
+
+
+    static int i_ac(u8* data, int offset)
+    {
+        printdbg("cmp i_ac: ");
+
+        return CMD::i_ac("cmp", data, offset);
+    }
 }
 
 
@@ -710,9 +966,11 @@ static int decode_next(u8* data, int offset)
 {
     using OC = OpCode::Name;
 
-    auto byte = data[offset];
+    auto opcode =  OpCode::parse(data[offset], data[offset + 1]);
 
-    auto opcode =  OpCode::parse(byte, 0);
+    static int line = 1;
+
+    printf("%3d ", line++);
 
     switch (opcode)
     {
@@ -731,8 +989,40 @@ static int decode_next(u8* data, int offset)
     case OC::mov_ac_m:
         offset = MOV::ac_m(data, offset);
         break;
+    
+    case OC::add_rm_r:
+        offset = ADD::rm_r(data, offset);
+        break;
+    case OC::add_i_rm:
+        offset = ADD::i_rm(data, offset);
+        break;
+    case OC::add_i_ac:
+        offset = ADD::i_ac(data, offset);
+        break;
+
+    case OC::sub_rm_r:
+        offset = SUB::rm_r(data, offset);
+        break;
+    case OC::sub_i_rm:
+        offset = SUB::i_rm(data, offset);
+        break;
+    case OC::sub_i_ac:
+        offset = SUB::i_ac(data, offset);
+        break;
+
+    case OC::cmp_rm_r:
+        offset = CMP::rm_r(data, offset);
+        break;
+    case OC::cmp_i_rm:
+        offset = CMP::i_rm(data, offset);
+        break;
+    case OC::cmp_i_ac:
+        offset = CMP::i_ac(data, offset);
+        break;
+
     default:
-        printf("opcode (byte1): %d\n", (int)data[offset]);
+        printf("opcode (byte1): ");
+        print_binary(data[offset]);
         return -1;
     }
 
