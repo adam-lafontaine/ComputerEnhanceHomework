@@ -391,42 +391,96 @@ namespace OpCode
 {
     enum class Name : int
     {
-        mov_rm_tf_r,
-        mov_i_to_rm,
-        mov_i_to_r,
-        mov_m_to_ac,
-        mov_ac_to_m,
+        mov_rm_r,
+        mov_i_rm,
+        mov_i_r,
+        mov_m_ac,
+        mov_ac_m,
+
+        add_rm_r,       
+        add_i_ac,
+
+        sub_rm_r,        
+        sub_i_ac,
+
+        cmp_rm_r,        
+        cmp_i_ac,
+
+        add_i_rm,
+        sub_i_rm,
+        cmp_i_rm,
+
         none = -1
     };
 
 
-    static OpCode::Name parse(u8 byte)
+    static OpCode::Name parse(u8 byte1, u8 byte2)
     {
         using OC = OpCode::Name;
 
-        auto top4 = byte >> 4;
-        auto top6 = byte >> 2;
-        auto top7 = byte >> 1;
+        auto top4 = byte1 >> 4;
+        auto top6 = byte1 >> 2;
+        auto top7 = byte1 >> 1;        
 
         if (top6 == 0b0010'0010)
         {
-            return OC::mov_rm_tf_r;
+            return OC::mov_rm_r;
         }
         else if (top7 == 0b0110'0011)
         {
-            return OC::mov_i_to_rm;
+            return OC::mov_i_rm;
         }
         else if (top4 == 0b0000'1011)
         {
-            return OC::mov_i_to_r;
+            return OC::mov_i_r;
         }
         else if (top7 == 0b0101'0000)
         {
-            return OC::mov_m_to_ac;
+            return OC::mov_m_ac;
         }
         else if (top7 == 0b01010001)
         {
-            return OC::mov_ac_to_m;
+            return OC::mov_ac_m;
+        }
+        else if (top6 == 0b0000'000)
+        {
+            return OC::add_rm_r;
+        }
+        else if (top7 == 0b0000'0010)
+        {
+            return OC::add_i_ac;
+        }
+        else if (top6 == 0b000'1010)
+        {
+            return OC::sub_rm_r;
+        }
+        else if (top7 == 0b0001'0110)
+        {
+            return OC::sub_i_ac;
+        }
+        else if (top6 == 0b0000'1110)
+        {
+            return OC::cmp_rm_r;
+        }
+        else if (top7 == 0b0001'1110)
+        {
+            return OC::cmp_i_ac;
+        }
+        else if (top6 == 0b0010'0000)
+        {
+            auto bits3 = (byte2 && 0b00'111'000) >> 3;
+            if (bits3 == 0b00000'000)
+            {
+                return OC::add_i_rm;
+            }
+            else if (bits3 == 0b00000'101)
+            {
+                return OC::sub_i_rm;
+            }
+            else if (bits3 == 0b00000'111)
+            {
+                return OC::cmp_i_rm;
+            }
         }
 
         return OC::none;
@@ -439,9 +493,9 @@ namespace MOV
     namespace R = Reg;
     namespace RM = RegMem;
 
-    static int rm_tf_r(u8* data, int offset)
+    static int rm_r(u8* data, int offset)
     {
-        printdbg("mov rm_tf_r: ");
+        printdbg("mov rm_r: ");
 
         auto byte1 = data[offset];
         auto byte2 = data[offset + 1];
@@ -499,9 +553,9 @@ namespace MOV
     }
 
 
-    static int i_to_rm(u8* data, int offset)
+    static int i_rm(u8* data, int offset)
     {
-        printdbg("mov i_to_rm: ");
+        printdbg("mov i_rm: ");
 
         auto byte1 = data[offset];
         auto byte2 = data[offset + 1];
@@ -556,9 +610,9 @@ namespace MOV
     }
 
 
-    static int i_to_r(u8* data, int offset)
+    static int i_r(u8* data, int offset)
     {
-        printdbg("mov i_to_r:  ");
+        printdbg("mov i_r:  ");
 
         auto byte1 = data[offset];
 
@@ -586,9 +640,9 @@ namespace MOV
     }
 
 
-    static int m_to_ac(u8* data, int offset)
+    static int m_ac(u8* data, int offset)
     {
-        printdbg("mov m_to_ac: ");
+        printdbg("mov m_ac: ");
 
         auto byte1 = data[offset];
 
@@ -615,9 +669,9 @@ namespace MOV
     }
 
 
-    static int ac_to_m(u8* data, int offset)
+    static int ac_m(u8* data, int offset)
     {
-        printdbg("mov ac_to_m: ");
+        printdbg("mov ac_m: ");
 
         auto byte1 = data[offset];
 
@@ -646,30 +700,36 @@ namespace MOV
 }
 
 
+namespace ADD
+{
+
+}
+
+
 static int decode_next(u8* data, int offset)
 {
     using OC = OpCode::Name;
 
     auto byte = data[offset];
 
-    auto opcode =  OpCode::parse(byte);
+    auto opcode =  OpCode::parse(byte, 0);
 
     switch (opcode)
     {
-    case OC::mov_rm_tf_r:        
-        offset = MOV::rm_tf_r(data, offset);
+    case OC::mov_rm_r:        
+        offset = MOV::rm_r(data, offset);
         break;
-    case OC::mov_i_to_rm:
-        offset = MOV::i_to_rm(data, offset);
+    case OC::mov_i_rm:
+        offset = MOV::i_rm(data, offset);
         break;
-    case OC::mov_i_to_r:
-        offset = MOV::i_to_r(data, offset);
+    case OC::mov_i_r:
+        offset = MOV::i_r(data, offset);
         break;
-    case OC::mov_m_to_ac:
-        offset = MOV::m_to_ac(data, offset);
+    case OC::mov_m_ac:
+        offset = MOV::m_ac(data, offset);
         break;
-    case OC::mov_ac_to_m:
-        offset = MOV::ac_to_m(data, offset);
+    case OC::mov_ac_m:
+        offset = MOV::ac_m(data, offset);
         break;
     default:
         printf("opcode (byte1): %d\n", (int)data[offset]);
@@ -706,6 +766,7 @@ static void decode(cstr bin_file)
 int main()
 {
     decode("../02/listing_0039_more_movs");
-
     decode("../02/listing_0040_challenge_movs");
+
+    decode("listing_0041_add_sub_cmp_jnz");
 }
