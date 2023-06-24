@@ -457,6 +457,27 @@ namespace OpCode
         sub_i_rm,
         cmp_i_rm,
 
+        je,
+        jl,
+        jle,
+        jb,
+        jbe,
+        jp,
+        jo,
+        js,
+        jnz,
+        jnl,
+        jg,
+        jnb,
+        ja,
+        jnp,
+        jno,
+        jns,
+        loop,
+        loopz,
+        loopnz,
+        jcxz,
+
         none = -1
     };
 
@@ -528,6 +549,86 @@ namespace OpCode
             {
                 return OC::cmp_i_rm;
             }
+        }
+        else if (byte1 == 0b0111'0100)
+        {
+            return OC::je;
+        }
+        else if (byte1 == 0b0111'1100)
+        {
+            return OC::jl;
+        }
+        else if (byte1 == 0b0111'1110)
+        {
+            return OC::jle;
+        }
+        else if (byte1 == 0b0111'0010)
+        {
+            return OC::jb;
+        }
+        else if (byte1 == 0b0111'0110)
+        {
+            return OC::jbe;
+        }
+        else if (byte1 == 0b0111'1010)
+        {
+            return OC::jp;
+        }
+        else if (byte1 == 0b0111'0000)
+        {
+            return OC::jo;
+        }
+        else if (byte1 == 0b0111'1000)
+        {
+            return OC::js;
+        }
+        else if (byte1 == 0b0111'0101)
+        {
+            return OC::jnz;
+        }
+        else if (byte1 == 0b0111'1101)
+        {
+            return OC::jnl;
+        }
+        else if (byte1 == 0b0111'1111)
+        {
+            return OC::jg;
+        }
+        else if (byte1 == 0b0111'0011)
+        {
+            return OC::jnb;
+        }
+        else if (byte1 == 0b0111'0111)
+        {
+            return OC::ja;
+        }
+        else if (byte1 == 0b0111'1011)
+        {
+            return OC::jnp;
+        }
+        else if (byte1 == 0b0111'0001)
+        {
+            return OC::jno;
+        }
+        else if (byte1 == 0b0111'1001)
+        {
+            return OC::jns;
+        }
+        else if (byte1 == 0b1110'0010)
+        {
+            return OC::loop;
+        }
+        else if (byte1 == 0b1110'0001)
+        {
+            return OC::loopz;
+        }
+        else if (byte1 == 0b1110'0000)
+        {
+            return OC::loopnz;
+        }
+        else if (byte1 == 0b1110'0011)
+        {
+            return OC::jcxz;
         }
 
         return OC::none;
@@ -713,6 +814,16 @@ namespace CMD
         printf("%s %s, %s\n", cmd, dst, src);
 
         return offset;
+    }
+
+
+    static int jump(cstr cmd, u8* data, int offset)
+    {
+        auto byte2 = data[offset + 1];
+
+        printf("%s %d\n", cmd, byte2);
+
+        return offset + 2;
     }
     
 }
@@ -1018,6 +1129,67 @@ static int decode_next(u8* data, int offset)
         break;
     case OC::cmp_i_ac:
         offset = CMP::i_ac(data, offset);
+        break;
+
+    case OC::je:
+        offset = CMD::jump("je", data, offset);
+        break;
+    case OC::jl:
+        offset = CMD::jump("jl", data, offset);
+        break;
+    case OC::jle:
+        offset = CMD::jump("jle", data, offset);
+        break;
+    case OC::jb:
+        offset = CMD::jump("jb", data, offset);
+        break;
+    case OC::jbe:
+        offset = CMD::jump("jbe", data, offset);
+        break;
+    case OC::jp:
+        offset = CMD::jump("jp", data, offset);
+        break;
+    case OC::jo:
+        offset = CMD::jump("jo", data, offset);
+        break;
+    case OC::js:
+        offset = CMD::jump("js", data, offset);
+        break;
+    case OC::jnz:
+        offset = CMD::jump("jnz", data, offset);
+        break;
+    case OC::jnl:
+        offset = CMD::jump("jnl", data, offset);
+        break;
+    case OC::jg:
+        offset = CMD::jump("jg", data, offset);
+        break;
+    case OC::jnb:
+        offset = CMD::jump("jnb", data, offset);
+        break;
+    case OC::ja:
+        offset = CMD::jump("ja", data, offset);
+        break;
+    case OC::jnp:
+        offset = CMD::jump("jnp", data, offset);
+        break;
+    case OC::jno:
+        offset = CMD::jump("jno", data, offset);
+        break;
+    case OC::jns:
+        offset = CMD::jump("jns", data, offset);
+        break;
+    case OC::loop:
+        offset = CMD::jump("loop", data, offset);
+        break;
+    case OC::loopz:
+        offset = CMD::jump("loopz", data, offset);
+        break;
+    case OC::loopnz:
+        offset = CMD::jump("loopnz", data, offset);
+        break;
+    case OC::jcxz:
+        offset = CMD::jump("jcxz", data, offset);
         break;
 
     default:
