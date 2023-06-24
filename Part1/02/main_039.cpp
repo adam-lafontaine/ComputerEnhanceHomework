@@ -85,17 +85,6 @@ static ByteBuffer read_bytes(fs::path const& path)
 }
 
 
-enum class OpCode : int
-{
-    mov_rm_tf_r = 0b100010'00,
-    mov_i_to_rm = 0b1100011'0,
-    mov_i_to_r = 0b1011'0000,
-    mov_m_to_a = 0b1010000'0,
-    mov_a_to_m = 0b1010001'0,
-    none = 0
-};
-
-
 enum class Register : int
 {
     // W = 0
@@ -207,7 +196,7 @@ enum class RegisterMemory : int
 
 static RegisterMemory calc_rm(int w_bits1, int mod_bits2, int rm_bits3)
 {
-    auto mod = mod_bits2 * 3;
+    auto mod = mod_bits2 * 8;
     auto rm = rm_bits3;
 
     auto w = (w_bits1 && mod == 24) ? 8 : 0;    
@@ -346,6 +335,19 @@ static void print_register_memory(RegisterMemory rm, int disp, char* dst)
     if (rm_int <= (int)RM::mod_10_rm_111)
     {        
         char buffer[6] = { 0 };
+
+        if (disp < 0)
+        {
+
+        }
+        else if (disp > 0)
+        {
+
+        }
+        else
+        {
+            
+        }
         snprintf(buffer, 6, "%d", disp);
         snprintf(dst, len + 8, "[%s %s]", rm_str, buffer);
         return;
@@ -356,31 +358,42 @@ static void print_register_memory(RegisterMemory rm, int disp, char* dst)
 }
 
 
+enum class OpCode : int
+{
+    mov_rm_tf_r = 0b100010'00 >> 2,
+    mov_i_to_rm = 0b1100011'0 >> 1,
+    mov_i_to_r = 0b1011'0000 >> 4,
+    mov_m_to_a = 0b1010000'0 >> 1,
+    mov_a_to_m = 0b1010001'0 >> 1,
+    none = -1
+};
+
+
 static OpCode parse_opcode(u8 byte)
 {
     using OC = OpCode;
 
-    constexpr int top4 = 0b1111'0000;
-    constexpr int top6 = 0b1111'1100;
-    constexpr int top7 = 0b1111'1110;
+    auto top4 = byte >> 4;
+    auto top6 = byte >> 2;
+    auto top7 = byte >> 1;
 
-    if (byte & top6 == (int)OC::mov_rm_tf_r)
+    if (top6 == (int)OC::mov_rm_tf_r)
     {
         return OC::mov_rm_tf_r;
     }
-    else if (byte & top7 == (int)OC::mov_i_to_rm)
+    else if (top7 == (int)OC::mov_i_to_rm)
     {
         return OC::mov_i_to_rm;
     }
-    else if (byte & top4 == (int)OC::mov_i_to_r)
+    else if (top4 == (int)OC::mov_i_to_r)
     {
         return OC::mov_i_to_r;
     }
-    else if (byte & top7 == (int)OC::mov_m_to_a)
+    else if (top7 == (int)OC::mov_m_to_a)
     {
         return OC::mov_m_to_a;
     }
-    else if (byte & top7 == (int)OC::mov_m_to_a)
+    else if (top7 == (int)OC::mov_m_to_a)
     {
         return OC::mov_a_to_m;
     }
@@ -506,15 +519,16 @@ static int decode_mov_i_to_r(u8* data, int offset)
 
     auto w_bits1 = (byte1 & 0b0000'1000) >> 3;
     auto reg_bits3 = byte1 & 0b0000'0111;
-
-    offset += 1;
-    int im_data = (int)(data[offset]);
+    
+    int im_data = (int)(data[offset + 1]);
     
     if (w_bits1)
     {
-        im_data += (data[offset] << 8);
+        im_data += (data[offset + 2] << 8);
         offset += 1;
     }
+
+    offset += 2;
 
     char src[6] = { 0 };
     snprintf(src, 6, "%d", im_data);
@@ -559,6 +573,7 @@ static int decode_next(u8* data, int offset)
     auto byte = data[offset];
 
     auto opcode = parse_opcode(byte);
+    //printf("opcode %d\n", (int)opcode);
 
     switch (opcode)
     {
@@ -578,12 +593,9 @@ static int decode_next(u8* data, int offset)
         offset = decode_mov_a_to_m(data, offset);
         break;
     default:
-        printf("opcode: %d\n", (int)opcode);
-        return offset;
+        printf("opcode: %d\n", (int)data[offset]);
+        return -1;
     }
-
-    
-
 
     return offset;
 }
@@ -591,3 +603,22 @@ static int decode_next(u8* data, int offset)
 
 
 constexpr auto BIN_FILE = "listing_0039_more_movs";
+
+
+int main()
+{
+    auto buffer = read_bytes(BIN_FILE);
+
+    assert(buffer.data);
+    assert(buffer.size);
+
+    printf("bits 16\n\n");
+
+    int offset = 0;
+    while (offset >= 0 && offset < buffer.size)
+    {
+        offset = decode_next(buffer.data, offset);
+    }
+
+    destroy_buffer(buffer);
+}
