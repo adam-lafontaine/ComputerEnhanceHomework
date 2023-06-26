@@ -112,7 +112,7 @@ namespace ASM
 
     static void print(InstStr const& inst)
     {
-        printf("%s %s %s\n", inst.op.str, inst.dst.str, inst.src.str);
+        printf("%s %s %s", inst.op.str, inst.dst.str, inst.src.str);
     }
 
 
@@ -197,11 +197,69 @@ namespace ASM
             if (inst.is_valid)
             {
                 print(inst);
+                printf("\n");
             }
         }
 
         Bytes::destroy(buffer);
     }
+}
+
+
+namespace REG
+{
+    constexpr int HI_8 = 0b1111'1111'0000'0000;
+    constexpr int LOW_8 = 0b0000'0000'1111'1111;
+
+    static u16 AX = 0;
+    static u16 BX = 0;
+    static u16 CX = 0;
+    static u16 DX = 0;
+    static u16 SP = 0;
+    static u16 BP = 0;
+    static u16 SI = 0;
+    static u16 DI = 0;
+
+
+    static int ax() { return (int)AX; }
+    static int bx() { return (int)BX; }
+    static int cx() { return (int)CX; }
+    static int dx() { return (int)DX; }    
+
+    static int ah() { return AX >> 8; }
+    static int bh() { return BX >> 8; }
+    static int ch() { return CX >> 8; }
+    static int dh() { return DX >> 8; }
+
+    static int al() { return AX & LOW_8; }
+    static int bl() { return BX & LOW_8; }
+    static int cl() { return CX & LOW_8; }
+    static int dl() { return DX & LOW_8; }
+
+    static int sp() { return (int)SP; }
+    static int bp() { return (int)BP; }
+    static int si() { return (int)SI; }
+    static int di() { return (int)DI; }    
+
+    static void ax(int v) { AX = (u16)v; }
+    static void bx(int v) { BX = (u16)v; }
+    static void cx(int v) { CX = (u16)v; }
+    static void dx(int v) { DX = (u16)v; }
+
+    static void ah(int v) { AX = (u16)(((v & LOW_8) << 8) + (AX & LOW_8)); }
+    static void bh(int v) { AX = (u16)(((v & LOW_8) << 8) + (BX & LOW_8)); }
+    static void ch(int v) { AX = (u16)(((v & LOW_8) << 8) + (CX & LOW_8)); }
+    static void dh(int v) { AX = (u16)(((v & LOW_8) << 8) + (DX & LOW_8)); }
+
+    static void al(int v) { AX = (u16)((AX & HI_8) + (v & LOW_8)); }
+    static void bl(int v) { BX = (u16)((BX & HI_8) + (v & LOW_8)); }
+    static void cl(int v) { CX = (u16)((CX & HI_8) + (v & LOW_8)); }
+    static void dl(int v) { DX = (u16)((DX & HI_8) + (v & LOW_8)); }
+
+    static void sp(int v) { SP = (u16)v; }
+    static void bp(int v) { BP = (u16)v; }
+    static void si(int v) { SI = (u16)v; }
+    static void di(int v) { DI = (u16)v; }
 }
 
 
