@@ -2,7 +2,7 @@ GPP := g++-11
 
 build := ./build_files
 
-exe := $(build)/decode
+exe := $(build)/run
 
 
 # main
