@@ -268,7 +268,7 @@ namespace REG
     };
 
 
-    static int get(Name r)
+    static int get_value(Name r)
     {
         using R = REG::Name;
 
@@ -289,13 +289,112 @@ namespace REG
         case R::cl: return cl();
         case R::dl: return dl();
 
-        case R::sp: return ax();
-        case R::bp: return ax();
-        case R::si: return ax();
-        case R::di: return ax();
+        case R::sp: return sp();
+        case R::bp: return bp();
+        case R::si: return si();
+        case R::di: return di();
         }
 
         return -1;
+    }
+
+
+    static Name get_reg(cstr str)
+    {
+        using R = REG::Name;        
+
+        if (strncmp(str, "ax", 2) == 0)
+        {
+            return R::ax;
+        }
+        else if (strncmp(str, "bx", 2) == 0)
+        {
+            return R::bx;
+        }
+        else if (strncmp(str, "cx", 2) == 0)
+        {
+            return R::cx;
+        }
+        else if (strncmp(str, "dx", 2) == 0)
+        {
+            return R::dx;
+        }
+        else if (strncmp(str, "ah", 2) == 0)
+        {
+            return R::ah;
+        }
+        else if (strncmp(str, "bh", 2) == 0)
+        {
+            return R::bh;
+        }
+        else if (strncmp(str, "ch", 2) == 0)
+        {
+            return R::ch;
+        }
+        else if (strncmp(str, "dh", 2) == 0)
+        {
+            return R::dh;
+        }
+        else if (strncmp(str, "al", 2) == 0)
+        {
+            return R::al;
+        }
+        else if (strncmp(str, "bl", 2) == 0)
+        {
+            return R::bl;
+        }
+        else if (strncmp(str, "cl", 2) == 0)
+        {
+            return R::cl;
+        }
+        else if (strncmp(str, "dl", 2) == 0)
+        {
+            return R::dl;
+        }
+        else if (strncmp(str, "sp", 2) == 0)
+        {
+            return R::sp;
+        }
+        else if (strncmp(str, "bp", 2) == 0)
+        {
+            return R::bp;
+        }
+        else if (strncmp(str, "si", 2) == 0)
+        {
+            return R::si;
+        }
+        else if (strncmp(str, "di", 2) == 0)
+        {
+            return R::di;
+        }
+
+        return R::none;
+    }
+
+
+    static Name get_reg_dst(ASM::InstStr const& inst)
+    {
+        using R = REG::Name;
+
+        if (!inst.is_valid)
+        {
+            return R::none;
+        }
+
+        return get_reg(inst.dst.str);
+    }
+
+
+    static Name get_reg_src(ASM::InstStr const& inst)
+    {
+        using R = REG::Name;
+
+        if (!inst.is_valid)
+        {
+            return R::none;
+        }
+
+        return get_reg(inst.src.str);
     }
 
 
@@ -304,19 +403,34 @@ namespace REG
         auto const print = [](cstr str, int val){ printf("%s: 0x%04x (%d)\n", str, val, val); };
 
         print("ax", ax());
-        print("bx", cx());
+        print("bx", bx());
         print("cx", cx());
         print("dx", dx());
         print("sp", sp());
         print("bp", bp());
         print("si", si());
         print("di", di());
-    }       
+    }
+
+
+    static void reset()
+    {
+        AX = 0;
+        BX = 0;
+        CX = 0;
+        DX = 0;
+        SP = 0;
+        BP = 0;
+        SI = 0;
+        DI = 0;
+    }
 }
 
 
 namespace MOV
 {
+    typedef void (*func_t)(int);
+
     static void ax(int v) { REG::AX = (u16)v; }
     static void bx(int v) { REG::BX = (u16)v; }
     static void cx(int v) { REG::CX = (u16)v; }
@@ -336,6 +450,53 @@ namespace MOV
     static void bp(int v) { REG::BP = (u16)v; }
     static void si(int v) { REG::SI = (u16)v; }
     static void di(int v) { REG::DI = (u16)v; }
+
+    static void no_op(int) {}
+
+
+    static func_t get_mov_f(REG::Name reg)
+    {
+        using R = REG::Name;
+
+        switch (reg)
+        {
+        case R::ax: return ax;
+        case R::bx: return bx;
+        case R::cx: return cx;
+        case R::dx: return dx;
+        
+        case R::ah: return ah;
+        case R::bh: return bh;
+        case R::ch: return ch;
+        case R::dh: return dh;
+
+        case R::al: return al;
+        case R::bl: return bl;
+        case R::cl: return cl;
+        case R::dl: return dl;
+
+        case R::sp: return sp;
+        case R::bp: return bp;
+        case R::si: return si;
+        case R::di: return di;
+        }
+
+        return no_op;
+    }
+
+
+    static void do_mov(ASM::InstStr const& inst)
+    {
+        auto reg_dst = REG::get_reg_dst(inst);
+        auto v1 = REG::get_value(reg_dst);
+        auto reg_src = REG::get_reg_src(inst);
+        auto val = reg_src == REG::Name::none ? atoi(inst.src.str) : REG::get_value(reg_src);
+        auto mov = MOV::get_mov_f(reg_dst);
+        mov(val);
+        auto v2 = REG::get_value(reg_dst);
+
+        printf("%s:0x%x->0x%x", inst.dst.str, v1, v2);
+    }
 }
 
 
@@ -363,7 +524,7 @@ namespace OP
 
         auto str = inst.op.str;
 
-        if (strcmp(str, "mov"))
+        if (strcmp(str, "mov") == 0)
         {
             return Op::mov;
         }
@@ -374,10 +535,69 @@ namespace OP
 }
 
 
+static void eval(ASM::InstStr const& inst)
+{
+    using Op = OP::Name;
+
+    ASM::print(inst);
+    printf(" ; ");
+
+    auto op = OP::get_op(inst);
+
+    switch (op)
+    {
+    case Op::mov:
+        MOV::do_mov(inst);
+        break;
+    default:
+        printf("error");
+    }
+    
+
+    printf("\n");
+}
+
+
+static void eval_file(cstr asm_file)
+{
+    auto buffer = Bytes::read(asm_file);
+    if (!buffer.data)
+    {
+        printf("error %s", asm_file);
+    }
+
+    int offset = 0;
+    while (offset < buffer.size)
+    {
+        ASM::InstStr inst{};
+        offset = ASM::read_next(inst, buffer.data, offset);
+        if (!inst.is_valid)
+        {
+            continue;
+        }
+
+        eval(inst);
+    }
+
+    Bytes::destroy(buffer);
+}
+
+
 int main()
 {
-    ASM::print_file("listing_0043_immediate_movs.asm");
+    constexpr auto file_043 = "listing_0043_immediate_movs.asm";
+    constexpr auto file_044 = "listing_0044_register_movs.asm";
 
-    printf("Final registers:\n");
+    eval_file(file_043);
+
+    printf("\nFinal registers:\n");
+    REG::print_all();
+    printf("\n\n");
+
+    REG::reset();
+
+    eval_file(file_044);;
+
+    printf("\nFinal registers:\n");
     REG::print_all();
 }
