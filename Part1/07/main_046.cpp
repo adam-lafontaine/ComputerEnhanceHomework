@@ -740,6 +740,9 @@ namespace ADD
 
         if (f1 || f2)
         {
+            if (!f1){ f1 = ""; }
+            if (!f2){ f2 = ""; }
+
             printf(" flags:%s->%s", f1, f2);
         }
     }
@@ -866,6 +869,9 @@ namespace SUB
 
         if (f1 || f2)
         {
+            if (!f1){ f1 = ""; }
+            if (!f2){ f2 = ""; }
+
             printf(" flags:%s->%s", f1, f2);
         }
     }
@@ -902,6 +908,9 @@ namespace CMP
 
         if (f1 || f2)
         {
+            if (!f1){ f1 = ""; }
+            if (!f2){ f2 = ""; }
+            
             printf(" flags:%s->%s", f1, f2);
         }
     }
