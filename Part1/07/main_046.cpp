@@ -893,24 +893,15 @@ namespace CMP
         }        
 
         auto src = REG::get_reg_src(inst);
-        //auto val = src == REG::Name::none ? atoi(inst.src.str) : REG::get_value(src);
-
-        //auto v1 = REG::get_value(dst);
         auto f1 = REG::get_flags();
         REG::clear_flags();
-
-        //sub(dst, val);
-
-        //auto v2 = REG::get_value(dst);
         auto f2 = REG::get_flags();
-
-        //printf(" %s:0x%x->0x%x", inst.dst.str, v1, v2);
 
         if (f1 || f2)
         {
             if (!f1){ f1 = ""; }
             if (!f2){ f2 = ""; }
-            
+
             printf(" flags:%s->%s", f1, f2);
         }
     }
