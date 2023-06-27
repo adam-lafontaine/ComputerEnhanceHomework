@@ -596,7 +596,7 @@ int main()
 
     REG::reset();
 
-    eval_file(file_044);;
+    eval_file(file_044);
 
     printf("\nFinal registers:\n");
     REG::print_all();
