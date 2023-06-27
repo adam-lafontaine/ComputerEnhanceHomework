@@ -165,7 +165,12 @@ namespace ASM
         s = 0;
         while (line[i] != ' ')
         {
-            inst.dst.str[s++] = line[i++];
+            if (line[i] != ',')
+            {
+                inst.dst.str[s++] = line[i];
+            }
+
+            ++i;            
         }
 
         i++;
@@ -210,6 +215,8 @@ namespace REG
 {
     constexpr int HI_8 = 0b1111'1111'0000'0000;
     constexpr int LOW_8 = 0b0000'0000'1111'1111;
+    constexpr int ZF = 0b0000'0000'0000'0001;
+    constexpr int SF = 0b0000'0000'0000'0010;
 
     static u16 AX = 0;
     static u16 BX = 0;
@@ -219,6 +226,8 @@ namespace REG
     static u16 BP = 0;
     static u16 SI = 0;
     static u16 DI = 0;
+
+    static u16 FLAGS = 0;
 
 
     static int ax() { return (int)AX; }
@@ -240,6 +249,50 @@ namespace REG
     static int bp() { return (int)BP; }
     static int si() { return (int)SI; }
     static int di() { return (int)DI; }
+
+
+    static void set_flags(u16 reg)
+    {
+        FLAGS = 0;
+
+        if (reg == 0)
+        {
+            FLAGS |= ZF;
+            return;
+        }
+
+        if (reg & 0b1000'0000'0000'0000)
+        {
+            FLAGS |= SF;
+        }
+    }
+
+
+    static void clear_flags()
+    {
+        FLAGS = 0;
+    }
+
+
+    static cstr get_flags()
+    {
+        if (!FLAGS)
+        {
+            return 0;
+        }
+
+        if (FLAGS & ZF)
+        {
+            return "Z";
+        }
+
+        if (FLAGS & SF)
+        {
+            return "S";
+        }
+
+        return 0;
+    }
 
 
     enum class Name : int
@@ -423,13 +476,65 @@ namespace REG
         BP = 0;
         SI = 0;
         DI = 0;
+
+        FLAGS = 0;
     }
+}
+
+
+namespace OP
+{
+    enum class Name : int
+    {
+        mov,
+        add,
+        sub,
+        cmp,
+
+        none = -1
+    };
+
+
+    Name get_op(ASM::InstStr const& inst)
+    {
+        using Op = OP::Name;
+
+        if (!inst.is_valid)
+        {
+            return Op::none;
+        }
+
+        auto str = inst.op.str;
+
+        if (strcmp(str, "mov") == 0)
+        {
+            return Op::mov;
+        }
+        else if (strcmp(str, "add") == 0)
+        {
+            return Op::add;
+        }
+        else if (strcmp(str, "sub") == 0)
+        {
+            return Op::sub;
+        }
+        else if (strcmp(str, "cmp") == 0)
+        {
+            return Op::cmp;
+        }
+
+        return Op::none;
+    }
+
 }
 
 
 namespace MOV
 {
+    using Reg = REG::Name;
+
     typedef void (*func_t)(int);
+
 
     static void ax(int v) { REG::AX = (u16)v; }
     static void bx(int v) { REG::BX = (u16)v; }
@@ -485,53 +590,330 @@ namespace MOV
     }
 
 
+    static void mov(Reg dst, int src)
+    {
+        auto f = get_mov_f(dst);
+        f(src);
+    }
+
+
     static void do_mov(ASM::InstStr const& inst)
     {
-        auto reg_dst = REG::get_reg_dst(inst);
-        auto v1 = REG::get_value(reg_dst);
-        auto reg_src = REG::get_reg_src(inst);
-        auto val = reg_src == REG::Name::none ? atoi(inst.src.str) : REG::get_value(reg_src);
-        auto mov = MOV::get_mov_f(reg_dst);
-        mov(val);
-        auto v2 = REG::get_value(reg_dst);
+        auto dst = REG::get_reg_dst(inst);
+        if (dst == Reg::none)
+        {
+            printf("error dst: %s", inst.dst.str);
+            return;
+        }        
+
+        auto src = REG::get_reg_src(inst);
+        auto val = src == REG::Name::none ? atoi(inst.src.str) : REG::get_value(src);
+
+        auto v1 = REG::get_value(dst);
+
+        mov(dst, val);
+
+        auto v2 = REG::get_value(dst);
 
         printf("%s:0x%x->0x%x", inst.dst.str, v1, v2);
     }
 }
 
 
-namespace OP
+namespace ADD
 {
-    enum class Name : int
+    using Reg = REG::Name;
+
+    typedef void (*func_t)(int);
+
+
+    static u16 add_high(u16 reg, int v)
     {
-        mov,
-        add,
-        sub,
-        cmp,
+        auto high = (u16)(reg & REG::HI_8) << 8;
+        auto low = (u16)(reg & REG::LOW_8);
 
-        none = -1
-    };
+        high += (u16)((v & REG::LOW_8) << 8);
 
+        reg = high + low;
+        REG::set_flags(reg);
 
-    Name get_op(ASM::InstStr const& inst)
-    {
-        using Op = OP::Name;
-
-        if (!inst.is_valid)
-        {
-            return Op::none;
-        }
-
-        auto str = inst.op.str;
-
-        if (strcmp(str, "mov") == 0)
-        {
-            return Op::mov;
-        }
-
-        return Op::none;
+        return reg;
     }
 
+
+    static u16 add_low(u16 reg, int v)
+    {
+        auto high = (u16)(reg & REG::HI_8) << 8;
+        auto low = (u16)(reg & REG::LOW_8);
+
+        low += (u16)((v & REG::LOW_8) << 8);        
+
+        reg = high + low;
+        REG::set_flags(reg);
+
+        return reg;
+    }
+
+
+    static void ax(int v) { REG::AX += (u16)v; REG::set_flags(REG::AX); }
+    static void bx(int v) { REG::BX += (u16)v; REG::set_flags(REG::BX); }
+    static void cx(int v) { REG::CX += (u16)v; REG::set_flags(REG::CX); }
+    static void dx(int v) { REG::DX += (u16)v; REG::set_flags(REG::DX); }
+
+    static void ah(int v) { REG::AX = add_high(REG::AX, v); }
+    static void bh(int v) { REG::BX = add_high(REG::BX, v); }
+    static void ch(int v) { REG::CX = add_high(REG::CX, v); }
+    static void dh(int v) { REG::DX = add_high(REG::DX, v); }
+
+    static void al(int v) { REG::AX = add_low(REG::AX, v); }
+    static void bl(int v) { REG::BX = add_low(REG::BX, v); }
+    static void cl(int v) { REG::CX = add_low(REG::CX, v); }
+    static void dl(int v) { REG::DX = add_low(REG::DX, v); }
+
+    static void sp(int v) { REG::SP += (u16)v; REG::set_flags(REG::SP); }
+    static void bp(int v) { REG::BP += (u16)v; REG::set_flags(REG::BP); }
+    static void si(int v) { REG::SI += (u16)v; REG::set_flags(REG::SI); }
+    static void di(int v) { REG::DI += (u16)v; REG::set_flags(REG::DI); }
+
+    static void no_op(int) {}
+
+
+    static func_t get_add_f(REG::Name reg)
+    {
+        using R = REG::Name;
+
+        switch (reg)
+        {
+        case R::ax: return ax;
+        case R::bx: return bx;
+        case R::cx: return cx;
+        case R::dx: return dx;
+        
+        case R::ah: return ah;
+        case R::bh: return bh;
+        case R::ch: return ch;
+        case R::dh: return dh;
+
+        case R::al: return al;
+        case R::bl: return bl;
+        case R::cl: return cl;
+        case R::dl: return dl;
+
+        case R::sp: return sp;
+        case R::bp: return bp;
+        case R::si: return si;
+        case R::di: return di;
+        }
+
+        return no_op;
+    }
+
+
+    static void add(Reg dst, int src)
+    {
+        auto f = get_add_f(dst);
+        f(src);
+    }
+
+
+    static void do_add(ASM::InstStr const& inst)
+    {
+        auto dst = REG::get_reg_dst(inst);
+        if (dst == Reg::none)
+        {
+            printf("error dst: %s", inst.dst.str);
+            return;
+        }        
+
+        auto src = REG::get_reg_src(inst);
+        auto val = src == REG::Name::none ? atoi(inst.src.str) : REG::get_value(src);
+
+        auto v1 = REG::get_value(dst);
+        auto f1 = REG::get_flags();
+
+        add(dst, val);
+
+        auto v2 = REG::get_value(dst);
+        auto f2 = REG::get_flags();
+
+        printf(" %s:0x%x->0x%x", inst.dst.str, v1, v2);
+
+        if (f1 || f2)
+        {
+            if (!f1){ f1 = ""; }
+            if (!f2){ f2 = ""; }
+
+            printf(" flags:%s->%s", f1, f2);
+        }
+    }
+}
+
+
+namespace SUB
+{
+    using Reg = REG::Name;
+
+    typedef void (*func_t)(int);
+
+
+    static u16 sub_high(u16 reg, int v)
+    {
+        auto high = (u16)(reg & REG::HI_8) << 8;
+        auto low = (u16)(reg & REG::LOW_8);
+
+        high -= (u16)((v & REG::LOW_8) << 8);
+
+        reg = high + low;
+        REG::set_flags(reg);
+
+        return reg;
+    }
+
+
+    static u16 sub_low(u16 reg, int v)
+    {
+        auto high = (u16)(reg & REG::HI_8) << 8;
+        auto low = (u16)(reg & REG::LOW_8);
+
+        low -= (u16)((v & REG::LOW_8) << 8);        
+
+        reg = high + low;
+        REG::set_flags(reg);
+
+        return reg;
+    }
+
+
+    static void ax(int v) { REG::AX -= (u16)v; REG::set_flags(REG::AX); }
+    static void bx(int v) { REG::BX -= (u16)v; REG::set_flags(REG::BX); }
+    static void cx(int v) { REG::CX -= (u16)v; REG::set_flags(REG::CX); }
+    static void dx(int v) { REG::DX -= (u16)v; REG::set_flags(REG::DX); }
+
+    static void ah(int v) { REG::AX = sub_high(REG::AX, v); }
+    static void bh(int v) { REG::BX = sub_high(REG::BX, v); }
+    static void ch(int v) { REG::CX = sub_high(REG::CX, v); }
+    static void dh(int v) { REG::DX = sub_high(REG::DX, v); }
+
+    static void al(int v) { REG::AX = sub_low(REG::AX, v); }
+    static void bl(int v) { REG::BX = sub_low(REG::BX, v); }
+    static void cl(int v) { REG::CX = sub_low(REG::CX, v); }
+    static void dl(int v) { REG::DX = sub_low(REG::DX, v); }
+
+    static void sp(int v) { REG::SP -= (u16)v; REG::set_flags(REG::SP); }
+    static void bp(int v) { REG::BP -= (u16)v; REG::set_flags(REG::BP); }
+    static void si(int v) { REG::SI -= (u16)v; REG::set_flags(REG::SI); }
+    static void di(int v) { REG::DI -= (u16)v; REG::set_flags(REG::DI); }
+
+    static void no_op(int) {}
+
+
+    static func_t get_sub_f(REG::Name reg)
+    {
+        using R = REG::Name;
+
+        switch (reg)
+        {
+        case R::ax: return ax;
+        case R::bx: return bx;
+        case R::cx: return cx;
+        case R::dx: return dx;
+        
+        case R::ah: return ah;
+        case R::bh: return bh;
+        case R::ch: return ch;
+        case R::dh: return dh;
+
+        case R::al: return al;
+        case R::bl: return bl;
+        case R::cl: return cl;
+        case R::dl: return dl;
+
+        case R::sp: return sp;
+        case R::bp: return bp;
+        case R::si: return si;
+        case R::di: return di;
+        }
+
+        return no_op;
+    }
+
+
+    static void sub(Reg dst, int src)
+    {
+        auto f = get_sub_f(dst);
+        f(src);
+    }
+
+
+    static void do_sub(ASM::InstStr const& inst)
+    {
+        auto dst = REG::get_reg_dst(inst);
+        if (dst == Reg::none)
+        {
+            printf("error dst: %s", inst.dst.str);
+            return;
+        }        
+
+        auto src = REG::get_reg_src(inst);
+        auto val = src == REG::Name::none ? atoi(inst.src.str) : REG::get_value(src);
+
+        auto v1 = REG::get_value(dst);
+        auto f1 = REG::get_flags();
+
+        sub(dst, val);
+
+        auto v2 = REG::get_value(dst);
+        auto f2 = REG::get_flags();
+
+        printf(" %s:0x%x->0x%x", inst.dst.str, v1, v2);
+
+        if (f1 || f2)
+        {
+            if (!f1){ f1 = ""; }
+            if (!f2){ f2 = ""; }
+
+            printf(" flags:%s->%s", f1, f2);
+        }
+    }
+}
+
+
+namespace CMP
+{
+    using Reg = REG::Name;
+
+
+    static void do_cmp(ASM::InstStr const& inst)
+    {
+        auto dst = REG::get_reg_dst(inst);
+        if (dst == Reg::none)
+        {
+            printf("error dst: %s", inst.dst.str);
+            return;
+        }        
+
+        auto src = REG::get_reg_src(inst);
+        //auto val = src == REG::Name::none ? atoi(inst.src.str) : REG::get_value(src);
+
+        //auto v1 = REG::get_value(dst);
+        auto f1 = REG::get_flags();
+        REG::clear_flags();
+
+        //sub(dst, val);
+
+        //auto v2 = REG::get_value(dst);
+        auto f2 = REG::get_flags();
+
+        //printf(" %s:0x%x->0x%x", inst.dst.str, v1, v2);
+
+        if (f1 || f2)
+        {
+            if (!f1){ f1 = ""; }
+            if (!f2){ f2 = ""; }
+            
+            printf(" flags:%s->%s", f1, f2);
+        }
+    }
 }
 
 
@@ -540,7 +922,7 @@ static void eval(ASM::InstStr const& inst)
     using Op = OP::Name;
 
     ASM::print(inst);
-    printf(" ; ");
+    printf(" ;");
 
     auto op = OP::get_op(inst);
 
@@ -549,10 +931,18 @@ static void eval(ASM::InstStr const& inst)
     case Op::mov:
         MOV::do_mov(inst);
         break;
+    case Op::add:
+        ADD::do_add(inst);
+        break;
+    case Op::sub:
+        SUB::do_sub(inst);
+        break;
+    case Op::cmp:
+        CMP::do_cmp(inst);
+        break;
     default:
         printf("error");
-    }
-    
+    }    
 
     printf("\n");
 }
@@ -585,19 +975,11 @@ static void eval_file(cstr asm_file)
 
 int main()
 {
-    constexpr auto file_043 = "listing_0043_immediate_movs.asm";
-    constexpr auto file_044 = "listing_0044_register_movs.asm";
+    constexpr auto file_046 = "listing_0046_add_sub_cmp.asm";
 
-    eval_file(file_043);
-
-    printf("\nFinal registers:\n");
-    REG::print_all();
-    printf("\n\n");
-
-    REG::reset();
-
-    eval_file(file_044);
+    eval_file(file_046);
 
     printf("\nFinal registers:\n");
     REG::print_all();
+
 }
