@@ -626,6 +626,8 @@ namespace ADD
 {
     using Reg = REG::Name;
 
+    typedef void (*func_t)(int);
+
 
     static u16 add_high(u16 reg, int v)
     {

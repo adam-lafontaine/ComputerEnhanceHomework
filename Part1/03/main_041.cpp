@@ -506,7 +506,7 @@ namespace OpCode
         {
             return OC::mov_m_ac;
         }
-        else if (top7 == 0b01010001)
+        else if (top7 == 0b0101'0001)
         {
             return OC::mov_ac_m;
         }
