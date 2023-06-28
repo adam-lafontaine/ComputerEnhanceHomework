@@ -97,111 +97,74 @@ namespace Bytes
 }
 
 
-namespace ASM
+namespace OP
 {
-    class InstStr
+    enum class Name : int
     {
-    public:
-        Cstr op;
-        Cstr src;
-        Cstr dst;
+        mov,
+        add,
+        sub,
+        cmp,
 
-        bool is_valid;
+        je,
+        jl,
+        jle,
+        jb,
+        jbe,
+        jp,
+        jo,
+        js,
+        jnz,
+        jnl,
+        jg,
+        jnb,
+        ja,
+        jnp,
+        jno,
+        jns,
+        loop,
+        loopz,
+        loopnz,
+        jcxz,
+
+        none = -1
     };
 
 
-    static void print(InstStr const& inst)
+    static cstr decode(OP::Name op)
     {
-        printf("%s %s %s", inst.op.str, inst.dst.str, inst.src.str);
-    }
+        using Op = OP::Name;
 
-
-    static int next_line(u8* data, int offset)
-    {
-        while (data[offset++] != '\n'){}
-
-        return offset;
-    }
-
-
-    static int read_line(char* line, u8* data, int offset)
-    {
-        u32 i = 0;
-        while (data[offset] != '\n') 
+        switch (op)
         {
-            line[i++] = (char)data[offset++];
+        case Op::mov: return "mov";
+        case Op::add: return "add";
+        case Op::sub: return "sub";
+        case Op::cmp: return "cmp";
+
+        case Op::je:  return "je";
+        case Op::jl:  return "jl";
+        case Op::jle: return "jle";
+        case Op::jb:  return "jb";
+        case Op::jbe: return "jbe";
+        case Op::jp:  return "jp";
+        case Op::jo:  return "jo";
+        case Op::js:  return "js";
+        case Op::jnz: return "jnz";
+        case Op::jnl: return "jnl";
+        case Op::jnb: return "jnb";
+        case Op::ja:  return "ja";
+        case Op::jnp: return "jnp";
+        case Op::jno: return "jno";
+        case Op::jns: return "jns";
+
+        case Op::loop:   return "loop";
+        case Op::loopz:  return "loopz";
+        case Op::loopnz: return "loopnz";
+        case Op::jcxz:   return "jcxz";
         }
 
-        return offset;
-    }
-
-
-    static int read_next(InstStr& inst, u8* data, int offset)
-    {
-        inst.is_valid = false;
-
-        switch((char)data[offset])
-        {
-        case ';':  return next_line(data, offset);
-        case '\n': return offset + 1;
-        }
-        
-        char line[20] = { 0 };
-        offset = read_line(line, data, offset);
-
-        if (strcmp(line, "bits 16") == 0)
-        {
-            return offset;
-        }
-
-        u32 i = 0;
-        u32 s = 0;
-        while (line[i] != ' ')
-        {
-            inst.op.str[s++] = line[i++];
-        }
-
-        i++;
-        s = 0;
-        while (line[i] != ' ')
-        {
-            inst.dst.str[s++] = line[i++];
-        }
-
-        i++;
-        s = 0;
-        while (line[i])
-        {
-            inst.src.str[s++] = line[i++];
-        }
-
-        inst.is_valid = true;
-
-        return offset;
-    }
-
-
-    static void print_file(cstr asm_file)
-    {
-        auto buffer = Bytes::read(asm_file);
-        if (!buffer.data)
-        {
-            printf("error %s", asm_file);
-        }
-
-        int offset = 0;
-        while (offset < buffer.size)
-        {
-            InstStr inst{};
-            offset = read_next(inst, buffer.data, offset);
-            if (inst.is_valid)
-            {
-                print(inst);
-                printf("\n");
-            }
-        }
-
-        Bytes::destroy(buffer);
+        return "err";
     }
 }
 
@@ -266,6 +229,37 @@ namespace REG
 
         none = -1
     };
+
+
+    static cstr decode(Name r)
+    {
+        using R = REG::Name;
+
+        switch (r)
+        {
+        case R::ax: return "ax";
+        case R::bx: return "bx";
+        case R::cx: return "cx";
+        case R::dx: return "dx";
+        
+        case R::ah: return "ah";
+        case R::bh: return "bh";
+        case R::ch: return "ch";
+        case R::dh: return "dh";
+
+        case R::al: return "al";
+        case R::bl: return "bl";
+        case R::cl: return "cl";
+        case R::dl: return "dl";
+
+        case R::sp: return "sp";
+        case R::bp: return "bp";
+        case R::si: return "si";
+        case R::di: return "di";
+        }
+
+        return "err";
+    }
 
 
     static int get_value(Name r)
@@ -372,29 +366,40 @@ namespace REG
     }
 
 
-    static Name get_reg_dst(ASM::InstStr const& inst)
+    Name get_reg(int reg_b3, int w)
     {
         using R = REG::Name;
 
-        if (!inst.is_valid)
+        if (w)
         {
-            return R::none;
+            switch (reg_b3)
+            {
+            case 0: return R::ax;
+            case 1: return R::cx;
+            case 2: return R::dx;
+            case 3: return R::bx;
+            case 4: return R::sp;
+            case 5: return R::bp;
+            case 6: return R::si;
+            case 7: return R::di;
+            }
+        }
+        else
+        {
+            switch (reg_b3)
+            {
+            case 0: return R::al;
+            case 1: return R::cl;
+            case 2: return R::dl;
+            case 3: return R::bl;
+            case 4: return R::ah;
+            case 5: return R::ch;
+            case 6: return R::dh;
+            case 7: return R::bh;
+            }
         }
 
-        return get_reg(inst.dst.str);
-    }
-
-
-    static Name get_reg_src(ASM::InstStr const& inst)
-    {
-        using R = REG::Name;
-
-        if (!inst.is_valid)
-        {
-            return R::none;
-        }
-
-        return get_reg(inst.src.str);
+        return R::none;
     }
 
 
@@ -423,6 +428,618 @@ namespace REG
         BP = 0;
         SI = 0;
         DI = 0;
+    }
+}
+
+
+namespace ASM
+{
+    using Op = OP::Name;
+    using Reg = REG::Name;
+
+
+    class RegMem
+    {
+    public:
+        Reg reg = Reg::none;
+        int mem_offset;
+        // effective address
+    };
+
+
+    class RegMemData
+    {
+    public:
+        Reg reg = Reg::none;
+        int mem_offset;
+        // effective address
+
+        int immediate = 0;
+    };
+
+
+    static void print(RegMem const& rm)
+    {
+        if (rm.reg == Reg::none)
+        {
+            printf("[%d]", rm.mem_offset);
+        }
+        else
+        {
+            printf("%s", REG::decode(rm.reg));
+        }
+    }
+
+
+    static void print(RegMemData const& rmd)
+    {
+
+    }
+    
+
+    class Instr
+    {
+    public:
+        Op op = Op::none;
+        
+        RegMem dst;
+
+        RegMemData src;
+        
+        int offset_begin;
+        int offset_end;
+    };
+
+
+    static void print(Instr const& inst)
+    {
+        if (inst.src.reg != Reg::none)
+        {
+            printf("%s %s [%d]", decode(inst.op), REG::decode(inst.dst.reg), inst.src.mem_offset);
+        }
+        else
+        {
+            printf("%s %s %s", decode(inst.op), REG::decode(inst.dst), REG::decode(inst.src));
+        }
+    }
+
+
+    
+
+
+    static void set_rm_r(Instr& inst, u8* data)
+    {
+        auto offset = inst.offset_begin;
+
+        auto byte1 = data[offset];
+        auto byte2 = data[offset + 1];
+        
+        auto w_b1 = byte1 & 0b0000'0001;
+        auto mod_b2 = byte2 >> 6;        
+        auto rm_b3 = byte2 & 0b00'000'111;
+
+        auto disp_sz = get_disp_sz(mod_b2, rm_b3);
+        auto disp = get_disp_val(data + 2, disp_sz);
+
+        inst.offset_end = inst.offset_begin + 2 + disp_sz;
+
+        auto rm = REG::get_reg(rm_b3, w_b1);
+        assert(mod_b2 == 0b11);
+
+        auto d_b1 = (byte1 & 0b0000'0010) >> 1;
+        auto reg_b3 = (byte2 & 0b00'111'000) >> 3;
+
+        auto reg = REG::get_reg(reg_b3, w_b1);
+
+        if (d_b1)
+        {
+            inst.dst = reg;
+            inst.src = rm;
+        }
+        else
+        {
+            inst.dst = rm;
+            inst.src = reg;
+        }
+    }
+
+
+    static void set_i_rm(Instr& inst, u8* data)
+    {
+        auto offset = inst.offset_begin;
+
+        auto byte1 = data[offset];
+        auto byte2 = data[offset + 1];
+
+        auto w_b1 = byte1 & 0b0000'0001;
+        auto mod_b2 = byte2 >> 6;
+        auto rm_b3 = byte2 & 0b00'000'111;
+
+        auto disp_sz = get_disp_sz(mod_b2, rm_b3);
+        auto disp = get_disp_val(data + 2, disp_sz);
+
+        inst.offset_end = inst.offset_begin + 3 + disp_sz;
+
+        auto rm = REG::get_reg(rm_b3, w_b1);
+        assert(mod_b2 == 0b11);
+
+        int im_data = data[offset + 2];
+
+        if (w_b1)
+        {
+            im_data += (data[offset + 3] << 8);
+            inst.offset_end++;
+        }
+
+        inst.dst = rm;
+        inst.src_val = im_data;
+    }
+
+
+    static void set_i_ac(Instr& inst, u8* data)
+    {
+        auto offset = inst.offset_begin;
+
+        auto byte1 = data[offset];
+        auto byte2 = data[offset + 1];
+
+        auto w = byte1 & 0b0000'0001;
+    }
+
+
+    static void set_mov_rm_r(Instr& inst, u8* data)
+    {
+        inst.op = Op::mov;
+        set_rm_r(inst, data);
+    }
+
+
+    static void set_mov_i_rm(Instr& inst, u8* data)
+    {
+        inst.op = Op::mov;
+        set_i_rm(inst, data);
+    }
+
+
+    static void set_mov_i_r(Instr& inst, u8* data)
+    {
+        inst.op = Op::mov;
+
+        auto offset = inst.offset_begin;
+
+        auto byte1 = data[offset];
+
+        auto w_b1 = byte1 & 0b0000'1000;
+        auto reg_b3 = byte1 & 0b00'000'111;
+
+        auto reg = REG::get_reg(reg_b3, w_b1);
+
+        int im_data = data[offset + 1];
+        inst.offset_end = inst.offset_begin + 2;
+
+        if (w_b1)
+        {
+            im_data += (data[offset + 2] << 8);
+            inst.offset_end++;
+        }
+
+        inst.dst = reg;
+        inst.src_val = im_data;        
+    }
+
+
+    static void set_mov_m_ac(Instr& inst, u8* data)
+    {
+        inst.op = Op::mov;
+
+        auto offset = inst.offset_begin;
+
+        auto byte1 = data[offset];
+        auto byte2 = data[offset + 1];
+
+        auto w_b1 = byte1 & 0b0000'0001;
+
+        int addr = (int)(data[offset + 1]);
+
+        inst.dst = Reg::ax;
+        inst.offset_end = inst.offset_begin + 2 + w_b1;        
+    }
+
+
+    static void set_mov_ac_m(Instr& inst, u8* data)
+    {
+        inst.op = Op::mov;
+
+        auto offset = inst.offset_begin;
+
+        auto byte1 = data[offset];
+        auto byte2 = data[offset + 1];
+
+        auto w_b1 = byte1 & 0b0000'0001;
+
+        inst.src = Reg::ax;
+        inst.offset_end = inst.offset_begin + 2 + w_b1;
+    }
+
+
+    static Instr decode_next(u8* data, int offset)
+    {
+        constexpr int add_b3 = 0b000;
+        constexpr int sub_b3 = 0b101;
+        constexpr int cmp_b3 = 0b111;
+
+        Instr inst{};
+        inst.offset_begin = offset;
+
+        auto byte1 = data[offset];
+        auto byte2 = data[offset + 1];        
+
+        auto byte1_top4 = byte1 >> 4;
+        auto byte1_top6 = byte1 >> 2;
+        auto byte1_top7 = byte1 >> 1;
+
+        auto byte2_345 = (byte2 & 0b00'111'000) >> 3;
+
+        auto is_mov = 
+            byte1_top4 == 0b0000'1011 || 
+            byte1_top6 == 0b0010'0010 || 
+            byte1_top7 == 0b0110'0011 ||
+            byte1_top7 == 0b0101'0000 ||
+            byte1_top7 == 0b0101'0001;
+
+        auto is_add = 
+            byte1_top6 == 0b0000'0000 ||
+            byte1_top7 == 0b0000'0010 ||
+            (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0000);
+        
+        auto is_sub = 
+            byte1_top6 == 0b0000'1010 ||
+            byte1_top7 == 0b0001'0110 ||
+            (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0101);
+        
+        auto is_cmp = 
+            byte1_top6 == 0b0000'1110 ||
+            byte1_top7 == 0b0001'1110 ||
+            (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0111);
+        
+        auto const set_jump = [&](Op op)
+        {
+            inst.op = op;
+            inst.src_val = (int)byte2;
+            inst.offset_end = offset + 2;
+        };
+
+        if (is_mov)
+        {
+            inst.op = Op::mov;
+        }
+        else if (is_add)
+        {
+            inst.op = Op::add;
+        }
+        else if (is_sub)
+        {
+            inst.op = Op::sub;
+        }
+        else if (is_cmp)
+        {
+            inst.op = Op::cmp;
+        }
+        else if (byte1 == 0b0111'0100)
+        {
+            set_jump(Op::je);
+        }
+        else if (byte1 == 0b0111'1100)
+        {
+            set_jump(Op::jl);
+        }
+        else if (byte1 == 0b0111'1110)
+        {
+            set_jump(Op::jle);
+        }
+        else if (byte1 == 0b0111'0010)
+        {
+            set_jump(Op::jb);
+        }
+        else if (byte1 == 0b0111'0110)
+        {
+            set_jump(Op::jbe);
+        }
+        else if (byte1 == 0b0111'1010)
+        {
+            set_jump(Op::jp);
+        }
+        else if (byte1 == 0b0111'0000)
+        {
+            set_jump(Op::jo);
+        }
+        else if (byte1 == 0b0111'1000)
+        {
+            set_jump(Op::js);
+        }
+        else if (byte1 == 0b0111'0101)
+        {
+            set_jump(Op::jnz);
+        }
+        else if (byte1 == 0b0111'1101)
+        {
+            set_jump(Op::jnl);
+        }
+        else if (byte1 == 0b0111'1111)
+        {
+            set_jump(Op::jg);
+        }
+        else if (byte1 == 0b0111'0011)
+        {
+            set_jump(Op::jnb);
+        }
+        else if (byte1 == 0b0111'0111)
+        {
+            set_jump(Op::ja);
+        }
+        else if (byte1 == 0b0111'1011)
+        {
+            set_jump(Op::jnp);
+        }
+        else if (byte1 == 0b0111'0001)
+        {
+            set_jump(Op::jno);
+        }
+        else if (byte1 == 0b0111'1001)
+        {
+            set_jump(Op::jns);
+        }
+        else if (byte1 == 0b1110'0010)
+        {
+            set_jump(Op::loop);
+        }
+        else if (byte1 == 0b1110'0001)
+        {
+            set_jump(Op::loopz);
+        }
+        else if (byte1 == 0b1110'0000)
+        {
+            set_jump(Op::loopnz);
+        }
+        else if (byte1 == 0b1110'0011)
+        {
+            set_jump(Op::jcxz);
+        }
+        else
+        {
+            inst.op = Op::none;
+        }
+
+
+
+
+
+        return inst;
+    }
+}
+
+
+namespace CMD
+{
+    class Instr
+    {
+    public:
+        int src_reg_b3 = -1;
+        int src_mem_b3 = -1;        
+
+        int src_imlo_b8 = -1;
+        int src_imhi_b8 = -1;
+
+        int dst_reg_b3 = -1;
+        int dst_mem_b3 = -1;
+
+        int displo_b8 = -1;
+        int disphi_b8 = -1;
+
+        int offset_begin = 0;
+        int offset_end = 0;
+    };
+
+
+    class InstrData
+    {
+    public:
+        int opcode = -1;
+        int mod_b2 = -1;
+        int reg_b3 = -1;
+        int rm_b3 = -1;
+        int d_b1 = -1;
+        int w_b1 = -1;
+        int displo_b8 = -1;
+        int disphi_b8 = -1;
+        int imlo_b8 = -1;
+        int imhi_b8 = -1;
+        int addrlo_b8 = -1;
+        int addrhi_b8 = -1;
+
+        int offset_begin = 0;
+        int offset_end = 0;
+    };
+
+
+    static int get_disp_sz(int mod_b2, int rm_b3)
+    {
+        if (mod_b2 == 0b00 && rm_b3 == 0b110)
+        {
+            return 2;
+        }
+
+        switch (mod_b2)
+        {
+        case 0b00: return 0;
+        case 0b01: return 1;
+        case 0b10: return 2;
+        case 0b11: return 0;
+        }
+
+        return 0;
+    }
+
+
+    static int get_w_sz(int w_b1)
+    {
+        if (w_b1)
+        {
+            return 2;
+        }
+
+        return 1;
+    }
+
+
+    static int get_disp_val(u8* disp, int disp_sz)
+    {
+        switch (disp_sz)
+        {
+        case 1: return (int)(*disp);            
+        case 2: return (int)(*disp) + (*(disp + 1) << 8);            
+        }
+
+        return 0;
+    }
+
+
+    static void set_disp(InstrData& in, u8* disp, int disp_sz)
+    {
+        in.displo_b8 = *disp;
+
+        if (disp_sz == 2)
+        {
+            in.disphi_b8 = *(disp + 1) << 8;
+        }
+    }
+
+
+    static void set_im_data(InstrData& in, u8* im, int im_sz)
+    {
+        in.imlo_b8 = *im;
+
+        if (im_sz == 2)
+        {
+            in.imhi_b8 = *(im + 1) << 8;
+        }
+    }
+
+
+    static void set_addr(InstrData& in, u8* addr, int addr_sz)
+    {
+        in.addrlo_b8 = *addr;
+
+        if (addr_sz == 2)
+        {
+            in.imhi_b8 = *(addr + 1) << 8;
+        }
+    }
+
+
+    static InstrData get_rm_r(u8* data, int offset)
+    {
+        InstrData in{};   
+
+        auto byte1 = data[offset];
+        auto byte2 = data[offset + 1];
+
+        in.opcode = byte1 >> 2;
+        in.d_b1 = (byte1 & 0b0000'0010) >> 1;
+        in.w_b1 = byte1 & 0b0000'0001;
+        in.mod_b2 = byte2 >> 6;
+        in.reg_b3 = (byte2 & 0b00'111'000) >> 3;
+        in.rm_b3 = byte2 & 0b00'000'111;
+
+        auto disp_sz = get_disp_sz(in.mod_b2, in.rm_b3);
+        set_disp(in, data + 2, disp_sz);
+
+        in.offset_begin = offset;
+        in.offset_end = offset + 2 + disp_sz;
+
+        return in;
+    }
+
+
+    static InstrData get_im_rm(u8* data, int offset)
+    {
+        InstrData in{};   
+
+        auto byte1 = data[offset];
+        auto byte2 = data[offset + 1];
+
+        in.opcode = byte1 >> 1;
+        in.w_b1 = byte1 & 0b0000'0001;
+        in.mod_b2 = byte2 >> 6;
+        in.rm_b3 = byte2 & 0b00'000'111;
+
+        auto disp_sz = get_disp_sz(in.mod_b2, in.rm_b3);
+        set_disp(in, data + 2, disp_sz);
+        auto im_sz = get_w_sz(in.w_b1);
+        set_im_data(in, data + 2 + disp_sz, im_sz);
+
+        in.offset_begin = offset;
+        in.offset_end = offset + 2 + disp_sz + im_sz;
+
+        return in;
+    }
+
+
+    static InstrData get_mov_im_r(u8* data, int offset)
+    {
+        InstrData in{};   
+
+        auto byte1 = data[offset];
+
+        in.opcode = byte1 >> 4;
+        in.w_b1 = (byte1 & 0b0000'1000) >> 3;
+        in.reg_b3 = byte1 & 0b0000'0111;
+
+        auto im_sz = get_w_sz(in.w_b1);
+        set_im_data(in, data + 1, im_sz);
+
+        in.offset_begin = offset;
+        in.offset_end = offset + im_sz;
+
+        return in;
+    }
+
+
+    static InstrData get_mov_m_ac(u8* data, int offset)
+    {
+        InstrData in{};   
+
+        auto byte1 = data[offset];
+
+        in.opcode = byte1 >> 1;
+        in.w_b1 = byte1 & 0b0000'0001;
+
+        auto addr_sz = get_w_sz(in.w_b1);
+        set_addr(in, data + 1, addr_sz);
+
+        in.offset_begin = offset;
+        in.offset_end = offset + addr_sz;
+
+        return in;
+    }
+
+
+    static InstrData get_im_ac(u8* data, int offset)
+    {
+        InstrData in{};   
+
+        auto byte1 = data[offset];
+
+        in.opcode = byte1 >> 1;
+        in.w_b1 = byte1 & 0b0000'0001;
+
+        auto im_sz = get_w_sz(in.w_b1);
+        set_im_data(in, data + 1, im_sz);
+
+        in.offset_begin = offset;
+        in.offset_end = offset + im_sz;
+
+        return in;
     }
 }
 
@@ -500,41 +1117,6 @@ namespace MOV
 }
 
 
-namespace OP
-{
-    enum class Name : int
-    {
-        mov,
-        add,
-        sub,
-        cmp,
-
-        none = -1
-    };
-
-
-    Name get_op(ASM::InstStr const& inst)
-    {
-        using Op = OP::Name;
-
-        if (!inst.is_valid)
-        {
-            return Op::none;
-        }
-
-        auto str = inst.op.str;
-
-        if (strcmp(str, "mov") == 0)
-        {
-            return Op::mov;
-        }
-
-        return Op::none;
-    }
-
-}
-
-
 static void eval(ASM::InstStr const& inst)
 {
     using Op = OP::Name;
@@ -555,6 +1137,17 @@ static void eval(ASM::InstStr const& inst)
     
 
     printf("\n");
+}
+
+
+static void decode_bin_file(cstr bin_file)
+{
+    auto buffer = Bytes::read(bin_file);
+
+    assert(buffer.data);
+    assert(buffer.size);
+
+
 }
 
 
