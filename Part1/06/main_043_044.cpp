@@ -97,78 +97,6 @@ namespace Bytes
 }
 
 
-namespace OP
-{
-    enum class Name : int
-    {
-        mov,
-        add,
-        sub,
-        cmp,
-
-        je,
-        jl,
-        jle,
-        jb,
-        jbe,
-        jp,
-        jo,
-        js,
-        jnz,
-        jnl,
-        jg,
-        jnb,
-        ja,
-        jnp,
-        jno,
-        jns,
-        loop,
-        loopz,
-        loopnz,
-        jcxz,
-
-        none = -1
-    };
-
-
-    static cstr decode(OP::Name op)
-    {
-        using Op = OP::Name;
-
-        switch (op)
-        {
-        case Op::mov: return "mov";
-        case Op::add: return "add";
-        case Op::sub: return "sub";
-        case Op::cmp: return "cmp";
-
-        case Op::je:  return "je";
-        case Op::jl:  return "jl";
-        case Op::jle: return "jle";
-        case Op::jb:  return "jb";
-        case Op::jbe: return "jbe";
-        case Op::jp:  return "jp";
-        case Op::jo:  return "jo";
-        case Op::js:  return "js";
-        case Op::jnz: return "jnz";
-        case Op::jnl: return "jnl";
-        case Op::jnb: return "jnb";
-        case Op::ja:  return "ja";
-        case Op::jnp: return "jnp";
-        case Op::jno: return "jno";
-        case Op::jns: return "jns";
-
-        case Op::loop:   return "loop";
-        case Op::loopz:  return "loopz";
-        case Op::loopnz: return "loopnz";
-        case Op::jcxz:   return "jcxz";
-        }
-
-        return "err";
-    }
-}
-
-
 namespace REG
 {
     constexpr int HI_8 = 0b1111'1111'0000'0000;
@@ -749,7 +677,7 @@ namespace CMD
         REG::print_decode(cmd.src, cmd.disp, src);
         REG::print_decode(cmd.dst, cmd.disp, dst);
 
-        printf("%s %s, %s\n", op, dst, src);
+        printf("%s %s, %s", op, dst, src);
     }
 
 
@@ -760,7 +688,7 @@ namespace CMD
 
         REG::print_decode(cmd.dst, cmd.disp, dst);
 
-        printf("%s %s, %d\n", op, dst, src);
+        printf("%s %s, %d", op, dst, src);
     }
 
 
@@ -768,7 +696,7 @@ namespace CMD
     {
         auto src = cmd.src;
         auto dst = REG::decode(cmd.dst);        
-        printf("%s %s, [%d]\n", op, dst, src);
+        printf("%s %s, [%d]", op, dst, src);
     }
 
 
@@ -776,7 +704,7 @@ namespace CMD
     {
         auto src = REG::decode(cmd.src);
         auto dst = cmd.dst;
-        printf("%s [%d], %s\n", op, dst, src);
+        printf("%s [%d], %s", op, dst, src);
     }
 
 
@@ -784,7 +712,7 @@ namespace CMD
     {
         auto src = cmd.src;
         auto dst = REG::decode(cmd.dst);
-        printf("%s %s, %d\n", op, dst, src);
+        printf("%s %s, %d", op, dst, src);
     }
 
 
@@ -960,10 +888,10 @@ namespace MOV
     {
         switch (reg)
         {
-        case R::ax: return ax;
-        case R::bx: return bx;
-        case R::cx: return cx;
-        case R::dx: return dx;
+        case R::ax: return [](int v){ printf(" ; ax:0x%x", REG::AX); ax(v); printf("->0x%x", REG::AX); };
+        case R::bx: return [](int v){ printf(" ; bx:0x%x", REG::BX); bx(v); printf("->0x%x", REG::BX); };
+        case R::cx: return [](int v){ printf(" ; cx:0x%x", REG::CX); cx(v); printf("->0x%x", REG::CX); };
+        case R::dx: return [](int v){ printf(" ; dx:0x%x", REG::DX); dx(v); printf("->0x%x", REG::DX); };
         
         case R::ah: return ah;
         case R::bh: return bh;
@@ -975,10 +903,10 @@ namespace MOV
         case R::cl: return cl;
         case R::dl: return dl;
 
-        case R::sp: return sp;
-        case R::bp: return bp;
-        case R::si: return si;
-        case R::di: return di;
+        case R::sp: return [](int v){ printf(" ; sp:x0%x", REG::SP); sp(v); printf("->0x%x", REG::SP); };
+        case R::bp: return [](int v){ printf(" ; bp:0x%x", REG::BP); bp(v); printf("->0x%x", REG::BP); };
+        case R::si: return [](int v){ printf(" ; si:0x%x", REG::SI); si(v); printf("->0x%x", REG::SI); };
+        case R::di: return [](int v){ printf(" ; di:0x%x", REG::DI); di(v); printf("->0x%x", REG::DI); };
         }
 
         return no_op;
@@ -987,6 +915,8 @@ namespace MOV
 
     static void rm_r(CMD::RegMemReg const& cmd)
     {
+        CMD::print(cmd, "mov");
+
         auto f = get_mov_f(cmd.dst);
         auto val = REG::get_value(cmd.src);
         if (val >= 0)
@@ -994,32 +924,36 @@ namespace MOV
             f(val);
         }
 
-        CMD::print(cmd, "mov");
+        printf("\n");
     }
 
 
     static void im_rm(CMD::ImRegMem const& cmd)
     {
+        CMD::print(cmd, "mov");
+
         auto f = get_mov_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
         {
             f(val);
         }
-
-        CMD::print(cmd, "mov");
+        
+        printf("\n");
     }
 
 
     static void m_ac(CMD::MemAcc const& cmd)
     {
         CMD::print(cmd, "mov");
+        printf("\n");
     }
 
 
     static void ac_m(CMD::AccMem const& cmd)
     {
         CMD::print(cmd, "mov");
+        printf("\n");
     }
 }
 
@@ -1059,10 +993,10 @@ namespace ADD
     }
 
 
-    static void ax(int v) { REG::AX += (u16)v; REG::set_flags(REG::AX); }
-    static void bx(int v) { REG::BX += (u16)v; REG::set_flags(REG::BX); }
-    static void cx(int v) { REG::CX += (u16)v; REG::set_flags(REG::CX); }
-    static void dx(int v) { REG::DX += (u16)v; REG::set_flags(REG::DX); }
+    static void ax(int v) { REG::AX += (u16)v; }
+    static void bx(int v) { REG::BX += (u16)v; }
+    static void cx(int v) { REG::CX += (u16)v; }
+    static void dx(int v) { REG::DX += (u16)v; }
 
     static void ah(int v) { REG::AX = add_high(REG::AX, v); }
     static void bh(int v) { REG::BX = add_high(REG::BX, v); }
@@ -1074,10 +1008,10 @@ namespace ADD
     static void cl(int v) { REG::CX = add_low(REG::CX, v); }
     static void dl(int v) { REG::DX = add_low(REG::DX, v); }
 
-    static void sp(int v) { REG::SP += (u16)v; REG::set_flags(REG::SP); }
-    static void bp(int v) { REG::BP += (u16)v; REG::set_flags(REG::BP); }
-    static void si(int v) { REG::SI += (u16)v; REG::set_flags(REG::SI); }
-    static void di(int v) { REG::DI += (u16)v; REG::set_flags(REG::DI); }
+    static void sp(int v) { REG::SP += (u16)v; }
+    static void bp(int v) { REG::BP += (u16)v; }
+    static void si(int v) { REG::SI += (u16)v; }
+    static void di(int v) { REG::DI += (u16)v; }
 
     static void no_op(int) {}
 
@@ -1113,6 +1047,8 @@ namespace ADD
 
     static void rm_r(CMD::RegMemReg const& cmd)
     {
+        CMD::print(cmd, "add");
+
         auto f = get_add_f(cmd.dst);
         auto val = REG::get_value(cmd.src);
         if (val >= 0)
@@ -1120,7 +1056,7 @@ namespace ADD
             f(val);
         }
 
-        CMD::print(cmd, "add");
+        
     }
 
 
