@@ -101,6 +101,9 @@ namespace REG
 {
     constexpr int HI_8 = 0b1111'1111'0000'0000;
     constexpr int LOW_8 = 0b0000'0000'1111'1111;
+    constexpr int ZF = 0b0000'0000'0000'0001;
+    constexpr int SF = 0b0000'0000'0000'0010;
+    constexpr int PF = 0b0000'0000'0000'0100;
 
     static u16 AX = 0;
     static u16 BX = 0;
@@ -110,6 +113,8 @@ namespace REG
     static u16 BP = 0;
     static u16 SI = 0;
     static u16 DI = 0;
+
+    static u16 FLAGS = 0;
 
 
     static int ax() { return (int)AX; }
@@ -133,9 +138,47 @@ namespace REG
     static int di() { return (int)DI; }
 
 
-    static void set_flags(u16 reg) {}
+    static void set_flags(u16 reg)
+    {
+        FLAGS = 0;
 
-    static void set_p(u16 diff) {}
+        if (reg == 0)
+        {
+            FLAGS |= ZF;
+            return;
+        }
+
+        if (reg & 0b1000'0000'0000'0000)
+        {
+            FLAGS |= SF;
+        }
+    }
+
+    static void set_p(u16 diff) 
+    {
+        if (!diff)
+        {
+            FLAGS != PF;
+        }
+    }
+
+
+    static cstr get_flags()
+    {
+        switch (FLAGS)
+        {
+        case 0: return 0;
+        case ZF: return "Z";
+        case SF: return "S";
+        case PF: return "P";
+        case ZF | SF: return "ZS";
+        case ZF | PF: return "PZ";
+        case SF | PF: return "PS";
+        case ZF | SF | PF: return "PZS"; 
+        }
+
+        return 0;
+    }
 
 
     enum class Name : int
@@ -1049,6 +1092,8 @@ namespace ADD
     {
         CMD::print(cmd, "add");
 
+        auto flags1 = REG::get_flags();
+
         auto f = get_add_f(cmd.dst);
         auto val = REG::get_value(cmd.src);
         if (val >= 0)
@@ -1056,6 +1101,9 @@ namespace ADD
             f(val);
         }
 
+        auto flags2 = REG::get_flags();
+
+        printf(" flags:%s->%s", flags1, flags2);
         printf("\n");
     }
 
@@ -1064,6 +1112,8 @@ namespace ADD
     {
         CMD::print(cmd, "add");
 
+        auto flags1 = REG::get_flags();
+
         auto f = get_add_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
@@ -1071,6 +1121,9 @@ namespace ADD
             f(val);
         }
 
+        auto flags2 = REG::get_flags();
+
+        printf(" flags:%s->%s", flags1, flags2);
         printf("\n");
     }
 
@@ -1078,6 +1131,19 @@ namespace ADD
     static void im_ac(CMD::ImAcc const& cmd)
     {
         CMD::print(cmd, "add");
+
+        auto flags1 = REG::get_flags();
+
+        auto f = get_add_f(cmd.dst);
+        auto val = cmd.src;
+        if (val >= 0)
+        {
+            f(val);
+        }
+
+        auto flags2 = REG::get_flags();
+
+        printf(" flags:%s->%s", flags1, flags2);
         printf("\n");
     }
 }
@@ -1174,13 +1240,18 @@ namespace SUB
     {
         CMD::print(cmd, "sub");
 
+        auto flags1 = REG::get_flags();
+
         auto f = get_sub_f(cmd.dst);
         auto val = REG::get_value(cmd.src);
         if (val >= 0)
         {
             f(val);
         }
-        
+
+        auto flags2 = REG::get_flags();
+
+        printf(" flags:%s->%s", flags1, flags2);
         printf("\n");
     }
 
@@ -1189,13 +1260,18 @@ namespace SUB
     {
         CMD::print(cmd, "sub");
 
+        auto flags1 = REG::get_flags();
+
         auto f = get_sub_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
         {
             f(val);
         }
-        
+
+        auto flags2 = REG::get_flags();
+
+        printf(" flags:%s->%s", flags1, flags2);
         printf("\n");
     }
 
@@ -1203,6 +1279,19 @@ namespace SUB
     static void im_ac(CMD::ImAcc const& cmd)
     {
         CMD::print(cmd, "sub");
+
+        auto flags1 = REG::get_flags();
+
+        auto f = get_sub_f(cmd.dst);
+        auto val = cmd.src;
+        if (val >= 0)
+        {
+            f(val);
+        }
+
+        auto flags2 = REG::get_flags();
+
+        printf(" flags:%s->%s", flags1, flags2);
         printf("\n");
     }
 }
@@ -1283,10 +1372,11 @@ namespace CMP
     }
 
 
-
     static void rm_r(CMD::RegMemReg const& cmd)
     {
         CMD::print(cmd, "cmp");
+
+        auto flags1 = REG::get_flags();
 
         auto f = get_cmp_f(cmd.dst);
         auto val = REG::get_value(cmd.src);
@@ -1295,6 +1385,9 @@ namespace CMP
             f(val);
         }
 
+        auto flags2 = REG::get_flags();
+
+        printf(" flags:%s->%s", flags1, flags2);
         printf("\n");
     }
 
@@ -1303,6 +1396,8 @@ namespace CMP
     {
         CMD::print(cmd, "cmp");
 
+        auto flags1 = REG::get_flags();
+
         auto f = get_cmp_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
@@ -1310,6 +1405,9 @@ namespace CMP
             f(val);
         }
 
+        auto flags2 = REG::get_flags();
+
+        printf(" flags:%s->%s", flags1, flags2);
         printf("\n");
     }
 
@@ -1318,13 +1416,18 @@ namespace CMP
     {
         CMD::print(cmd, "cmp");
 
+        auto flags1 = REG::get_flags();
+
         auto f = get_cmp_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
         {
             f(val);
         }
-        
+
+        auto flags2 = REG::get_flags();
+
+        printf(" flags:%s->%s", flags1, flags2);
         printf("\n");
     }
 }
