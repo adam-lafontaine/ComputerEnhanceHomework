@@ -1443,13 +1443,6 @@ static int decode_next(u8* data, int offset)
     auto byte1_top7 = byte1 >> 1;
 
     auto byte2_345 = (byte2 & 0b00'111'000) >> 3;
-    
-    /*auto const set_jump = [&](Op op)
-    {
-        inst.op = op;
-        inst.src_val = (int)byte2;
-        inst.offset_end = offset + 2;
-    };*/
 
     if (byte1_top6 == 0b0010'0010)
     {
@@ -1555,87 +1548,6 @@ static int decode_next(u8* data, int offset)
         return inst.offset_end;
 
     }
-
-    /*else if (byte1 == 0b0111'0100)
-    {
-        set_jump(Op::je);
-    }
-    else if (byte1 == 0b0111'1100)
-    {
-        set_jump(Op::jl);
-    }
-    else if (byte1 == 0b0111'1110)
-    {
-        set_jump(Op::jle);
-    }
-    else if (byte1 == 0b0111'0010)
-    {
-        set_jump(Op::jb);
-    }
-    else if (byte1 == 0b0111'0110)
-    {
-        set_jump(Op::jbe);
-    }
-    else if (byte1 == 0b0111'1010)
-    {
-        set_jump(Op::jp);
-    }
-    else if (byte1 == 0b0111'0000)
-    {
-        set_jump(Op::jo);
-    }
-    else if (byte1 == 0b0111'1000)
-    {
-        set_jump(Op::js);
-    }
-    else if (byte1 == 0b0111'0101)
-    {
-        set_jump(Op::jnz);
-    }
-    else if (byte1 == 0b0111'1101)
-    {
-        set_jump(Op::jnl);
-    }
-    else if (byte1 == 0b0111'1111)
-    {
-        set_jump(Op::jg);
-    }
-    else if (byte1 == 0b0111'0011)
-    {
-        set_jump(Op::jnb);
-    }
-    else if (byte1 == 0b0111'0111)
-    {
-        set_jump(Op::ja);
-    }
-    else if (byte1 == 0b0111'1011)
-    {
-        set_jump(Op::jnp);
-    }
-    else if (byte1 == 0b0111'0001)
-    {
-        set_jump(Op::jno);
-    }
-    else if (byte1 == 0b0111'1001)
-    {
-        set_jump(Op::jns);
-    }
-    else if (byte1 == 0b1110'0010)
-    {
-        set_jump(Op::loop);
-    }
-    else if (byte1 == 0b1110'0001)
-    {
-        set_jump(Op::loopz);
-    }
-    else if (byte1 == 0b1110'0000)
-    {
-        set_jump(Op::loopnz);
-    }
-    else if (byte1 == 0b1110'0011)
-    {
-        set_jump(Op::jcxz);
-    }*/
 
     return -1;
 }
