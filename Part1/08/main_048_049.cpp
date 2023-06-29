@@ -104,6 +104,7 @@ namespace REG
     constexpr int ZF = 0b0000'0000'0000'0001;
     constexpr int SF = 0b0000'0000'0000'0010;
     constexpr int PF = 0b0000'0000'0000'0100;
+    constexpr int CF = 0b0000'0000'0000'1000;
 
     static u16 AX = 0;
     static u16 BX = 0;
@@ -113,8 +114,13 @@ namespace REG
     static u16 BP = 0;
     static u16 SI = 0;
     static u16 DI = 0;
+    static u16 IP = 0;
 
     static u16 FLAGS = 0;
+
+    static char trace_reg[20] = { 0 };
+    static char trace_ip[20] = { 0 };
+    static char trace_flags[20] = { 0 };
 
 
     static int ax() { return (int)AX; }
@@ -137,33 +143,12 @@ namespace REG
     static int si() { return (int)SI; }
     static int di() { return (int)DI; }
 
+    static int ip() { return (int)IP; }
 
-    static void set_flags(u16 reg)
-    {
-        FLAGS = 0;
-
-        if (reg == 0)
-        {
-            FLAGS |= ZF;
-            return;
-        }
-
-        if (reg & 0b1000'0000'0000'0000)
-        {
-            FLAGS |= SF;
-        }
-    }
-
-    static void set_p(u16 diff) 
-    {
-        if (!diff)
-        {
-            FLAGS != PF;
-        }
-    }
+    static int zf() { return FLAGS & ZF; }
 
 
-    static cstr get_flags()
+    static cstr get_flags_str()
     {
         switch (FLAGS)
         {
@@ -178,6 +163,50 @@ namespace REG
         }
 
         return " ";
+    }
+
+
+    static void set_flags(u16 reg)
+    {
+        auto old = get_flags_str();
+
+        FLAGS = 0;
+
+        if (reg == 0)
+        {
+            FLAGS |= ZF;
+            return;
+        }
+
+        if (reg & 0b1000'0000'0000'0000)
+        {
+            FLAGS |= SF;
+        }
+
+        memset(trace_flags, 0, sizeof(trace_flags));
+        snprintf(trace_flags, sizeof(trace_flags), "flags:%s->%s", old, get_flags_str());
+    }
+
+
+    static void set_p_flag(u16 diff) 
+    {
+        auto old = get_flags_str();
+
+        if (!diff)
+        {
+            FLAGS != PF;
+        }
+
+        memset(trace_flags, 0, sizeof(trace_flags));
+        snprintf(trace_flags, sizeof(trace_flags), "flags:%s->%s", old, get_flags_str());
+    }
+
+
+    static void print_trace()
+    {
+        printf(" ; %s", trace_reg);
+        printf(" %s", trace_ip);
+        printf(" %s", trace_flags);
     }
 
 
@@ -229,6 +258,8 @@ namespace REG
         bp,
         si,
         di,
+
+        ip,
 
         none = -1
     };
@@ -309,6 +340,8 @@ namespace REG
         case R::bp: return "bp";
         case R::si: return "si";
         case R::di: return "di";
+
+        case R::ip: return "ip";
         }
 
         return "err";
@@ -428,8 +461,29 @@ namespace REG
         print("bp", bp());
         print("si", si());
         print("di", di());
+        print("ip", ip());
 
-        printf("flags: %s", get_flags());
+        printf("flags: %s\n", get_flags_str());
+    }
+
+
+    static void set_reg(u16& reg, Name name, int v)
+    {
+        auto old = reg;
+        reg = (u16)v;
+        memset(trace_reg, 0, sizeof(trace_reg));
+        snprintf(trace_reg, sizeof(trace_reg), "%s:0x%x->0x%x", decode(name), old, reg);
+
+        set_flags(reg);
+    }
+    
+    
+    static void set_ip(int v)
+    {
+        int old = IP;
+        IP = (u16)v;
+        memset(trace_ip, 0, sizeof(trace_ip));
+        snprintf(trace_ip, sizeof(trace_ip), "ip:0x%x->0x%x", old, v);
     }
 
 
@@ -443,6 +497,7 @@ namespace REG
         BP = 0;
         SI = 0;
         DI = 0;
+        IP = 0;
     }
 }
 
@@ -458,12 +513,14 @@ namespace DATA
         int rm_b3 = -1;
         int d_b1 = -1;
         int w_b1 = -1;
+        int s_b1 = -1;
         int displo_b8 = -1;
         int disphi_b8 = -1;
         int imlo_b8 = -1;
         int imhi_b8 = -1;
         int addrlo_b8 = -1;
         int addrhi_b8 = -1;
+        int j_b8 = -1;
 
         int disp_sz = 0;
         int im_sz = 0;
@@ -472,6 +529,35 @@ namespace DATA
         int offset_begin = 0;
         int offset_end = 0;
     };
+
+
+    void print_binary(u8 value) 
+    {
+        printf("[");
+        for (int i = 7; i >= 4; --i) 
+        {
+            printf("%d", (value >> i) & 1);
+        }
+
+        printf(" ");
+
+        for (int i = 3; i >= 0; --i) 
+        {
+            printf("%d", (value >> i) & 1);
+        }
+        printf("]");
+    }
+
+
+    static void print_binary(u8* data, InstrData const& inst)
+    {
+        for (int o = inst.offset_begin; o < inst.offset_end; ++o)
+        {
+            print_binary(data[o]);
+        }
+
+        printf(" ");
+    }
 
 
     static int get_disp_sz(int mod_b2, int rm_b3)
@@ -575,6 +661,10 @@ namespace DATA
         in.offset_begin = offset;
         in.offset_end = offset + 2 + disp_sz;
 
+        REG::set_ip(in.offset_end);
+
+        //print_binary(data, in);
+
         return in;
     }
 
@@ -588,6 +678,7 @@ namespace DATA
 
         in.opcode = byte1 >> 1;
         in.w_b1 = byte1 & 0b0000'0001;
+        in.s_b1 = (byte1 & 0b0000'0010) >> 1;
         in.mod_b2 = byte2 >> 6;
         in.rm_b3 = byte2 & 0b00'000'111;
 
@@ -597,11 +688,15 @@ namespace DATA
             set_disp(in, data + offset + 2, disp_sz);
         }
 
-        auto im_sz = get_w_sz(in.w_b1);
+        auto im_sz = get_w_sz(in.w_b1 && !in.s_b1);
         set_im_data(in, data + offset + 2 + disp_sz, im_sz);
 
         in.offset_begin = offset;
         in.offset_end = offset + 2 + disp_sz + im_sz;
+
+        REG::set_ip(in.offset_end);
+
+        //print_binary(data, in);
 
         return in;
     }
@@ -623,6 +718,10 @@ namespace DATA
         in.offset_begin = offset;
         in.offset_end = offset + 1 + im_sz;
 
+        REG::set_ip(in.offset_end);
+
+        //print_binary(data, in);
+
         return in;
     }
 
@@ -642,6 +741,10 @@ namespace DATA
         in.offset_begin = offset;
         in.offset_end = offset + 1 + addr_sz;
 
+        REG::set_ip(in.offset_end);
+
+        //print_binary(data, in);
+
         return in;
     }
 
@@ -660,6 +763,27 @@ namespace DATA
 
         in.offset_begin = offset;
         in.offset_end = offset + 1 + im_sz;
+
+        REG::set_ip(in.offset_end);
+
+        //print_binary(data, in);
+
+        return in;
+    }
+
+
+    static InstrData get_jump(u8* data, int offset)
+    {
+        InstrData in{};   
+
+        auto byte1 = data[offset];
+
+        in.opcode = byte1;
+
+        in.j_b8 = data[offset + 1];
+
+        in.offset_begin = offset;
+        in.offset_end = offset + 2;
 
         return in;
     }
@@ -714,6 +838,13 @@ namespace CMD
     };
 
 
+    class Jump
+    {
+    public:
+        int j_offset = 0;
+    };
+
+
     static void print(RegMemReg const& cmd, cstr op)
     {
         char src[20] = { 0 };
@@ -758,6 +889,12 @@ namespace CMD
         auto src = cmd.src;
         auto dst = REG::decode(cmd.dst);
         printf("%s %s, %d", op, dst, src);
+    }
+
+
+    static void print(Jump const& j, cstr op)
+    {
+        printf("%s $%d", op, j.j_offset);
     }
 
 
@@ -807,7 +944,7 @@ namespace CMD
             res.disp = in_data.displo_b8 + (in_data.disphi_b8 << 8);
         }
 
-        if (in_data.im_sz == 1)
+        if (in_data.im_sz == 1 || in_data.s_b1 == 1)
         {
             res.src = in_data.imlo_b8;
         }
@@ -897,6 +1034,18 @@ namespace CMD
 
         return res;
     }
+
+
+    static Jump get_jump(DATA::InstrData const& in_data)
+    {
+        Jump res{};
+
+        auto j_b8 = in_data.j_b8;
+
+        res.j_offset = *((i8*)(&j_b8)) + in_data.offset_end - in_data.offset_begin;
+
+        return res;
+    }
 }
 
 
@@ -906,25 +1055,38 @@ namespace MOV
 
     typedef void (*func_t)(int);
 
-    static void ax(int v) { REG::AX = (u16)v; }
-    static void bx(int v) { REG::BX = (u16)v; }
-    static void cx(int v) { REG::CX = (u16)v; }
-    static void dx(int v) { REG::DX = (u16)v; }
 
-    static void ah(int v) { REG::AX = (u16)(((v & REG::LOW_8) << 8) + (REG::AX & REG::LOW_8)); }
-    static void bh(int v) { REG::AX = (u16)(((v & REG::LOW_8) << 8) + (REG::BX & REG::LOW_8)); }
-    static void ch(int v) { REG::AX = (u16)(((v & REG::LOW_8) << 8) + (REG::CX & REG::LOW_8)); }
-    static void dh(int v) { REG::AX = (u16)(((v & REG::LOW_8) << 8) + (REG::DX & REG::LOW_8)); }
+    static u16 set_high(u16 reg, int v)
+    {
+        return (u16)(((v & REG::LOW_8) << 8) + (reg & REG::LOW_8));
+    }
 
-    static void al(int v) { REG::AX = (u16)((REG::AX & REG::HI_8) + (v & REG::LOW_8)); }
-    static void bl(int v) { REG::BX = (u16)((REG::BX & REG::HI_8) + (v & REG::LOW_8)); }
-    static void cl(int v) { REG::CX = (u16)((REG::CX & REG::HI_8) + (v & REG::LOW_8)); }
-    static void dl(int v) { REG::DX = (u16)((REG::DX & REG::HI_8) + (v & REG::LOW_8)); }
 
-    static void sp(int v) { REG::SP = (u16)v; }
-    static void bp(int v) { REG::BP = (u16)v; }
-    static void si(int v) { REG::SI = (u16)v; }
-    static void di(int v) { REG::DI = (u16)v; }
+    static u16 set_low(u16 reg, int v)
+    {
+        return (u16)((reg & REG::HI_8) + (v & REG::LOW_8));
+    }
+
+
+    static void ax(int v) { REG::set_reg(REG::AX, R::ax, v); }
+    static void bx(int v) { REG::set_reg(REG::BX, R::bx, v); }
+    static void cx(int v) { REG::set_reg(REG::CX, R::cx, v); }
+    static void dx(int v) { REG::set_reg(REG::DX, R::dx, v); }
+
+    static void ah(int v) { REG::set_reg(REG::AX, R::ax, set_high(REG::AX, v)); }
+    static void bh(int v) { REG::set_reg(REG::BX, R::bx, set_high(REG::BX, v)); }
+    static void ch(int v) { REG::set_reg(REG::DX, R::cx, set_high(REG::CX, v)); }
+    static void dh(int v) { REG::set_reg(REG::DX, R::dx, set_high(REG::DX, v)); }
+
+    static void al(int v) { REG::set_reg(REG::AX, R::ax, set_low(REG::AX, v)); }
+    static void bl(int v) { REG::set_reg(REG::BX, R::bx, set_low(REG::BX, v)); }
+    static void cl(int v) { REG::set_reg(REG::DX, R::cx, set_low(REG::CX, v)); }
+    static void dl(int v) { REG::set_reg(REG::DX, R::dx, set_low(REG::DX, v)); }
+
+    static void sp(int v) { REG::set_reg(REG::SP, R::sp, v); }
+    static void bp(int v) { REG::set_reg(REG::BP, R::bp, v); }
+    static void si(int v) { REG::set_reg(REG::SI, R::si, v); }
+    static void di(int v) { REG::set_reg(REG::DI, R::di, v); }
 
     static void no_op(int) {}
 
@@ -933,10 +1095,10 @@ namespace MOV
     {
         switch (reg)
         {
-        case R::ax: return [](int v){ printf(" ; ax:0x%x", REG::AX); ax(v); printf("->0x%x", REG::AX); };
-        case R::bx: return [](int v){ printf(" ; bx:0x%x", REG::BX); bx(v); printf("->0x%x", REG::BX); };
-        case R::cx: return [](int v){ printf(" ; cx:0x%x", REG::CX); cx(v); printf("->0x%x", REG::CX); };
-        case R::dx: return [](int v){ printf(" ; dx:0x%x", REG::DX); dx(v); printf("->0x%x", REG::DX); };
+        case R::ax: return ax;
+        case R::bx: return bx;
+        case R::cx: return cx;
+        case R::dx: return dx;
         
         case R::ah: return ah;
         case R::bh: return bh;
@@ -948,10 +1110,10 @@ namespace MOV
         case R::cl: return cl;
         case R::dl: return dl;
 
-        case R::sp: return [](int v){ printf(" ; sp:x0%x", REG::SP); sp(v); printf("->0x%x", REG::SP); };
-        case R::bp: return [](int v){ printf(" ; bp:0x%x", REG::BP); bp(v); printf("->0x%x", REG::BP); };
-        case R::si: return [](int v){ printf(" ; si:0x%x", REG::SI); si(v); printf("->0x%x", REG::SI); };
-        case R::di: return [](int v){ printf(" ; di:0x%x", REG::DI); di(v); printf("->0x%x", REG::DI); };
+        case R::sp: return sp;
+        case R::bp: return bp;
+        case R::si: return si;
+        case R::di: return di;
         }
 
         return no_op;
@@ -968,8 +1130,6 @@ namespace MOV
         {
             f(val);
         }
-
-        printf("\n");
     }
 
 
@@ -983,22 +1143,18 @@ namespace MOV
         {
             f(val);
         }
-        
-        printf("\n");
     }
 
 
     static void m_ac(CMD::MemAcc const& cmd)
     {
         CMD::print(cmd, "mov");
-        printf("\n");
     }
 
 
     static void ac_m(CMD::AccMem const& cmd)
     {
         CMD::print(cmd, "mov");
-        printf("\n");
     }
 }
 
@@ -1038,25 +1194,25 @@ namespace ADD
     }
 
 
-    static void ax(int v) { REG::AX += (u16)v; }
-    static void bx(int v) { REG::BX += (u16)v; }
-    static void cx(int v) { REG::CX += (u16)v; }
-    static void dx(int v) { REG::DX += (u16)v; }
+    static void ax(int v) { REG::set_reg(REG::AX, R::ax, REG::AX + v); }
+    static void bx(int v) { REG::set_reg(REG::BX, R::bx, REG::BX + v); }
+    static void cx(int v) { REG::set_reg(REG::CX, R::cx, REG::CX + v); }
+    static void dx(int v) { REG::set_reg(REG::DX, R::dx, REG::DX + v); }
 
-    static void ah(int v) { REG::AX = add_high(REG::AX, v); }
-    static void bh(int v) { REG::BX = add_high(REG::BX, v); }
-    static void ch(int v) { REG::CX = add_high(REG::CX, v); }
-    static void dh(int v) { REG::DX = add_high(REG::DX, v); }
+    static void ah(int v) { REG::set_reg(REG::AX, R::ax, add_high(REG::AX, v)); }
+    static void bh(int v) { REG::set_reg(REG::BX, R::bx, add_high(REG::BX, v)); }
+    static void ch(int v) { REG::set_reg(REG::CX, R::cx, add_high(REG::CX, v)); }
+    static void dh(int v) { REG::set_reg(REG::DX, R::dx, add_high(REG::DX, v)); }
 
-    static void al(int v) { REG::AX = add_low(REG::AX, v); }
-    static void bl(int v) { REG::BX = add_low(REG::BX, v); }
-    static void cl(int v) { REG::CX = add_low(REG::CX, v); }
-    static void dl(int v) { REG::DX = add_low(REG::DX, v); }
+    static void al(int v) { REG::set_reg(REG::AX, R::ax, add_low(REG::AX, v)); }
+    static void bl(int v) { REG::set_reg(REG::BX, R::bx, add_low(REG::BX, v)); }
+    static void cl(int v) { REG::set_reg(REG::CX, R::cx, add_low(REG::CX, v)); }
+    static void dl(int v) { REG::set_reg(REG::CX, R::cx, add_low(REG::DX, v)); }
 
-    static void sp(int v) { REG::SP += (u16)v; }
-    static void bp(int v) { REG::BP += (u16)v; }
-    static void si(int v) { REG::SI += (u16)v; }
-    static void di(int v) { REG::DI += (u16)v; }
+    static void sp(int v) { REG::set_reg(REG::SP, R::sp, REG::SP + v); }
+    static void bp(int v) { REG::set_reg(REG::BP, R::bp, REG::BP + v); }
+    static void si(int v) { REG::set_reg(REG::SI, R::si, REG::SI + v); }
+    static void di(int v) { REG::set_reg(REG::DI, R::di, REG::DI + v); }
 
     static void no_op(int) {}
 
@@ -1065,10 +1221,10 @@ namespace ADD
     {
         switch (reg)
         {
-        case R::ax: return [](int v){ printf(" ; ax:0x%x", REG::AX); ax(v); printf("->0x%x", REG::AX); };
-        case R::bx: return [](int v){ printf(" ; bx:0x%x", REG::BX); bx(v); printf("->0x%x", REG::BX); };
-        case R::cx: return [](int v){ printf(" ; cx:0x%x", REG::CX); cx(v); printf("->0x%x", REG::CX); };
-        case R::dx: return [](int v){ printf(" ; dx:0x%x", REG::DX); dx(v); printf("->0x%x", REG::DX); };
+        case R::ax: return ax;
+        case R::bx: return bx;
+        case R::cx: return cx;
+        case R::dx: return dx;
         
         case R::ah: return ah;
         case R::bh: return bh;
@@ -1080,10 +1236,10 @@ namespace ADD
         case R::cl: return cl;
         case R::dl: return dl;
 
-        case R::sp: return [](int v){ printf(" ; sp:x0%x", REG::SP); sp(v); printf("->0x%x", REG::SP); };
-        case R::bp: return [](int v){ printf(" ; bp:0x%x", REG::BP); bp(v); printf("->0x%x", REG::BP); };
-        case R::si: return [](int v){ printf(" ; si:0x%x", REG::SI); si(v); printf("->0x%x", REG::SI); };
-        case R::di: return [](int v){ printf(" ; di:0x%x", REG::DI); di(v); printf("->0x%x", REG::DI); };
+        case R::sp: return sp;
+        case R::bp: return bp;
+        case R::si: return si;
+        case R::di: return di;
         }
 
         return no_op;
@@ -1094,19 +1250,12 @@ namespace ADD
     {
         CMD::print(cmd, "add");
 
-        auto flags1 = REG::get_flags();
-
         auto f = get_add_f(cmd.dst);
         auto val = REG::get_value(cmd.src);
         if (val >= 0)
         {
             f(val);
         }
-
-        auto flags2 = REG::get_flags();
-
-        printf(" flags:%s->%s", flags1, flags2);
-        printf("\n");
     }
 
 
@@ -1114,19 +1263,12 @@ namespace ADD
     {
         CMD::print(cmd, "add");
 
-        auto flags1 = REG::get_flags();
-
         auto f = get_add_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
         {
             f(val);
         }
-
-        auto flags2 = REG::get_flags();
-
-        printf(" flags:%s->%s", flags1, flags2);
-        printf("\n");
     }
 
 
@@ -1134,19 +1276,12 @@ namespace ADD
     {
         CMD::print(cmd, "add");
 
-        auto flags1 = REG::get_flags();
-
         auto f = get_add_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
         {
             f(val);
         }
-
-        auto flags2 = REG::get_flags();
-
-        printf(" flags:%s->%s", flags1, flags2);
-        printf("\n");
     }
 }
 
@@ -1186,25 +1321,25 @@ namespace SUB
     }
 
 
-    static void ax(int v) { REG::AX -= (u16)v; REG::set_flags(REG::AX); }
-    static void bx(int v) { REG::BX -= (u16)v; REG::set_flags(REG::BX); }
-    static void cx(int v) { REG::CX -= (u16)v; REG::set_flags(REG::CX); }
-    static void dx(int v) { REG::DX -= (u16)v; REG::set_flags(REG::DX); }
+    static void ax(int v) { REG::set_reg(REG::AX, R::ax, REG::AX - v); }
+    static void bx(int v) { REG::set_reg(REG::BX, R::bx, REG::BX - v); }
+    static void cx(int v) { REG::set_reg(REG::CX, R::cx, REG::CX - v); }
+    static void dx(int v) { REG::set_reg(REG::DX, R::dx, REG::DX - v); }
 
-    static void ah(int v) { REG::AX = sub_high(REG::AX, v); }
-    static void bh(int v) { REG::BX = sub_high(REG::BX, v); }
-    static void ch(int v) { REG::CX = sub_high(REG::CX, v); }
-    static void dh(int v) { REG::DX = sub_high(REG::DX, v); }
+    static void ah(int v) { REG::set_reg(REG::AX, R::ax, sub_high(REG::AX, v)); }
+    static void bh(int v) { REG::set_reg(REG::BX, R::bx, sub_high(REG::BX, v)); }
+    static void ch(int v) { REG::set_reg(REG::CX, R::cx, sub_high(REG::CX, v)); }
+    static void dh(int v) { REG::set_reg(REG::DX, R::dx, sub_high(REG::DX, v)); }
 
-    static void al(int v) { REG::AX = sub_low(REG::AX, v); }
-    static void bl(int v) { REG::BX = sub_low(REG::BX, v); }
-    static void cl(int v) { REG::CX = sub_low(REG::CX, v); }
-    static void dl(int v) { REG::DX = sub_low(REG::DX, v); }
+    static void al(int v) { REG::set_reg(REG::AX, R::ax, sub_low(REG::AX, v)); }
+    static void bl(int v) { REG::set_reg(REG::BX, R::bx, sub_low(REG::BX, v)); }
+    static void cl(int v) { REG::set_reg(REG::CX, R::cx, sub_low(REG::CX, v)); }
+    static void dl(int v) { REG::set_reg(REG::CX, R::cx, sub_low(REG::DX, v)); }
 
-    static void sp(int v) { REG::SP -= (u16)v; REG::set_flags(REG::SP); }
-    static void bp(int v) { REG::BP -= (u16)v; REG::set_flags(REG::BP); }
-    static void si(int v) { REG::SI -= (u16)v; REG::set_flags(REG::SI); }
-    static void di(int v) { REG::DI -= (u16)v; REG::set_flags(REG::DI); }
+    static void sp(int v) { REG::set_reg(REG::SP, R::sp, REG::SP - v); }
+    static void bp(int v) { REG::set_reg(REG::BP, R::bp, REG::BP - v); }
+    static void si(int v) { REG::set_reg(REG::SI, R::si, REG::SI - v); }
+    static void di(int v) { REG::set_reg(REG::DI, R::di, REG::DI - v); }
 
     static void no_op(int) {}
 
@@ -1213,10 +1348,10 @@ namespace SUB
     {
         switch (reg)
         {
-        case R::ax: return [](int v){ printf(" ; ax:0x%x", REG::AX); ax(v); printf("->0x%x", REG::AX); };
-        case R::bx: return [](int v){ printf(" ; bx:0x%x", REG::BX); bx(v); printf("->0x%x", REG::BX); };
-        case R::cx: return [](int v){ printf(" ; cx:0x%x", REG::CX); cx(v); printf("->0x%x", REG::CX); };
-        case R::dx: return [](int v){ printf(" ; dx:0x%x", REG::DX); dx(v); printf("->0x%x", REG::DX); };
+        case R::ax: return ax;
+        case R::bx: return bx;
+        case R::cx: return cx;
+        case R::dx: return dx;
         
         case R::ah: return ah;
         case R::bh: return bh;
@@ -1228,10 +1363,10 @@ namespace SUB
         case R::cl: return cl;
         case R::dl: return dl;
 
-        case R::sp: return [](int v){ printf(" ; sp:x0%x", REG::SP); sp(v); printf("->0x%x", REG::SP); };
-        case R::bp: return [](int v){ printf(" ; bp:0x%x", REG::BP); bp(v); printf("->0x%x", REG::BP); };
-        case R::si: return [](int v){ printf(" ; si:0x%x", REG::SI); si(v); printf("->0x%x", REG::SI); };
-        case R::di: return [](int v){ printf(" ; di:0x%x", REG::DI); di(v); printf("->0x%x", REG::DI); };
+        case R::sp: return sp;
+        case R::bp: return bp;
+        case R::si: return si;
+        case R::di: return di;
         }
 
         return no_op;
@@ -1242,19 +1377,12 @@ namespace SUB
     {
         CMD::print(cmd, "sub");
 
-        auto flags1 = REG::get_flags();
-
         auto f = get_sub_f(cmd.dst);
         auto val = REG::get_value(cmd.src);
         if (val >= 0)
         {
             f(val);
         }
-
-        auto flags2 = REG::get_flags();
-
-        printf(" flags:%s->%s", flags1, flags2);
-        printf("\n");
     }
 
 
@@ -1262,19 +1390,12 @@ namespace SUB
     {
         CMD::print(cmd, "sub");
 
-        auto flags1 = REG::get_flags();
-
         auto f = get_sub_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
         {
             f(val);
         }
-
-        auto flags2 = REG::get_flags();
-
-        printf(" flags:%s->%s", flags1, flags2);
-        printf("\n");
     }
 
 
@@ -1282,19 +1403,12 @@ namespace SUB
     {
         CMD::print(cmd, "sub");
 
-        auto flags1 = REG::get_flags();
-
         auto f = get_sub_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
         {
             f(val);
         }
-
-        auto flags2 = REG::get_flags();
-
-        printf(" flags:%s->%s", flags1, flags2);
-        printf("\n");
     }
 }
 
@@ -1322,25 +1436,25 @@ namespace CMP
     }
 
 
-    static void ax(int v) { REG::set_p(REG::AX - (u16)v); }
-    static void bx(int v) { REG::set_p(REG::BX - (u16)v); }
-    static void cx(int v) { REG::set_p(REG::CX - (u16)v); }
-    static void dx(int v) { REG::set_p(REG::DX - (u16)v); }
+    static void ax(int v) { REG::set_p_flag(REG::AX - (u16)v); }
+    static void bx(int v) { REG::set_p_flag(REG::BX - (u16)v); }
+    static void cx(int v) { REG::set_p_flag(REG::CX - (u16)v); }
+    static void dx(int v) { REG::set_p_flag(REG::DX - (u16)v); }
 
-    static void ah(int v) { REG::set_p(cmp_high(REG::AX, v)); }
-    static void bh(int v) { REG::set_p(cmp_high(REG::BX, v)); }
-    static void ch(int v) { REG::set_p(cmp_high(REG::CX, v)); }
-    static void dh(int v) { REG::set_p(cmp_high(REG::DX, v)); }
+    static void ah(int v) { REG::set_p_flag(cmp_high(REG::AX, v)); }
+    static void bh(int v) { REG::set_p_flag(cmp_high(REG::BX, v)); }
+    static void ch(int v) { REG::set_p_flag(cmp_high(REG::CX, v)); }
+    static void dh(int v) { REG::set_p_flag(cmp_high(REG::DX, v)); }
 
-    static void al(int v) { REG::set_p(cmp_low(REG::AX, v)); }
-    static void bl(int v) { REG::set_p(cmp_low(REG::BX, v)); }
-    static void cl(int v) { REG::set_p(cmp_low(REG::CX, v)); }
-    static void dl(int v) { REG::set_p(cmp_low(REG::DX, v)); }
+    static void al(int v) { REG::set_p_flag(cmp_low(REG::AX, v)); }
+    static void bl(int v) { REG::set_p_flag(cmp_low(REG::BX, v)); }
+    static void cl(int v) { REG::set_p_flag(cmp_low(REG::CX, v)); }
+    static void dl(int v) { REG::set_p_flag(cmp_low(REG::DX, v)); }
 
-    static void sp(int v) { REG::set_p(REG::SP - (u16)v); }
-    static void bp(int v) { REG::set_p(REG::BP - (u16)v); }
-    static void si(int v) { REG::set_p(REG::SI - (u16)v); }
-    static void di(int v) { REG::set_p(REG::DI - (u16)v); }
+    static void sp(int v) { REG::set_p_flag(REG::SP - (u16)v); }
+    static void bp(int v) { REG::set_p_flag(REG::BP - (u16)v); }
+    static void si(int v) { REG::set_p_flag(REG::SI - (u16)v); }
+    static void di(int v) { REG::set_p_flag(REG::DI - (u16)v); }
 
     static void no_op(int) {}
 
@@ -1349,10 +1463,10 @@ namespace CMP
     {
         switch (reg)
         {
-        case R::ax: return [](int v){ printf(" ; ax:0x%x", REG::AX); ax(v); printf("->0x%x", REG::AX); };
-        case R::bx: return [](int v){ printf(" ; bx:0x%x", REG::BX); bx(v); printf("->0x%x", REG::BX); };
-        case R::cx: return [](int v){ printf(" ; cx:0x%x", REG::CX); cx(v); printf("->0x%x", REG::CX); };
-        case R::dx: return [](int v){ printf(" ; dx:0x%x", REG::DX); dx(v); printf("->0x%x", REG::DX); };
+        case R::ax: return ax;
+        case R::bx: return bx;
+        case R::cx: return cx;
+        case R::dx: return dx;
         
         case R::ah: return ah;
         case R::bh: return bh;
@@ -1364,10 +1478,10 @@ namespace CMP
         case R::cl: return cl;
         case R::dl: return dl;
 
-        case R::sp: return [](int v){ printf(" ; sp:x0%x", REG::SP); sp(v); printf("->0x%x", REG::SP); };
-        case R::bp: return [](int v){ printf(" ; bp:0x%x", REG::BP); bp(v); printf("->0x%x", REG::BP); };
-        case R::si: return [](int v){ printf(" ; si:0x%x", REG::SI); si(v); printf("->0x%x", REG::SI); };
-        case R::di: return [](int v){ printf(" ; di:0x%x", REG::DI); di(v); printf("->0x%x", REG::DI); };
+        case R::sp: return sp;
+        case R::bp: return bp;
+        case R::si: return si;
+        case R::di: return di;
         }
 
         return no_op;
@@ -1378,19 +1492,12 @@ namespace CMP
     {
         CMD::print(cmd, "cmp");
 
-        auto flags1 = REG::get_flags();
-
         auto f = get_cmp_f(cmd.dst);
         auto val = REG::get_value(cmd.src);
         if (val >= 0)
         {
             f(val);
         }
-
-        auto flags2 = REG::get_flags();
-
-        printf(" flags:%s->%s", flags1, flags2);
-        printf("\n");
     }
 
 
@@ -1398,19 +1505,12 @@ namespace CMP
     {
         CMD::print(cmd, "cmp");
 
-        auto flags1 = REG::get_flags();
-
         auto f = get_cmp_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
         {
             f(val);
         }
-
-        auto flags2 = REG::get_flags();
-
-        printf(" flags:%s->%s", flags1, flags2);
-        printf("\n");
     }
 
 
@@ -1418,19 +1518,29 @@ namespace CMP
     {
         CMD::print(cmd, "cmp");
 
-        auto flags1 = REG::get_flags();
-
         auto f = get_cmp_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
         {
             f(val);
         }
+    }
+}
 
-        auto flags2 = REG::get_flags();
 
-        printf(" flags:%s->%s", flags1, flags2);
-        printf("\n");
+namespace JUMP
+{
+    static void jnz(CMD::Jump const& cmd)
+    {
+        CMD::print(cmd, "jnz");
+        if (REG::zf())
+        {
+            REG::set_ip(REG::ip() + 2);
+        }
+        else
+        {
+            REG::set_ip(REG::ip() + cmd.j_offset);
+        }
     }
 }
 
@@ -1458,35 +1568,35 @@ static int decode_next(u8* data, int offset)
         auto inst = DATA::get_rm_r(data, offset);
         auto cmd = CMD::get_rm_r(inst);
         MOV::rm_r(cmd);
-        return inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top7 == 0b0110'0011)
     {
         auto inst = DATA::get_im_rm(data, offset);
         auto cmd = CMD::get_im_rm(inst);
         MOV::im_rm(cmd);
-        return inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top4 == 0b0000'1011)
     {
         auto inst = DATA::get_mov_im_r(data, offset);
         auto cmd = CMD::get_im_r(inst);
         MOV::im_rm(cmd);
-        return inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top7 == 0b0110'0011)
     {
         auto inst = DATA::get_mov_m_ac(data, offset);
         auto cmd = CMD::get_m_ac(inst);
         MOV::m_ac(cmd);
-        return inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top7 == 0b0101'0001)
     {
         auto inst = DATA::get_mov_m_ac(data, offset);
         auto cmd = CMD::get_ac_m(inst);
         MOV::ac_m(cmd);
-        return inst.offset_end;
+        offset = REG::ip();
     }
 
     else if (byte1_top6 == 0b0000'0000)
@@ -1494,22 +1604,21 @@ static int decode_next(u8* data, int offset)
         auto inst = DATA::get_rm_r(data, offset);
         auto cmd = CMD::get_rm_r(inst);
         ADD::rm_r(cmd);
-        return inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0000)
     {
         auto inst = DATA::get_im_rm(data, offset);
         auto cmd = CMD::get_im_rm(inst);
         ADD::im_rm(cmd);
-        return inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top7 == 0b0001'0110)
     {
         auto inst = DATA::get_im_ac(data, offset);
         auto cmd = CMD::get_im_ac(inst);
         ADD::im_ac(cmd);
-        return inst.offset_end;
-
+        offset = REG::ip();
     }
 
     else if (byte1_top6 == 0b0000'1010)
@@ -1517,22 +1626,21 @@ static int decode_next(u8* data, int offset)
         auto inst = DATA::get_rm_r(data, offset);
         auto cmd = CMD::get_rm_r(inst);
         SUB::rm_r(cmd);
-        return inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0101)
     {
         auto inst = DATA::get_im_rm(data, offset);
         auto cmd = CMD::get_im_rm(inst);
         SUB::im_rm(cmd);
-        return inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top7 == 0b0001'0110)
     {
         auto inst = DATA::get_im_ac(data, offset);
         auto cmd = CMD::get_im_ac(inst);
         SUB::im_ac(cmd);
-        return inst.offset_end;
-
+        offset = REG::ip();
     }
 
     else if (byte1_top6 == 0b0000'1110)
@@ -1540,23 +1648,31 @@ static int decode_next(u8* data, int offset)
         auto inst = DATA::get_rm_r(data, offset);
         auto cmd = CMD::get_rm_r(inst);
         CMP::rm_r(cmd);
-        return inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0111)
     {
         auto inst = DATA::get_im_rm(data, offset);
         auto cmd = CMD::get_im_rm(inst);
         CMP::im_rm(cmd);
-        return inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top7 == 0b0001'1110)
     {
         auto inst = DATA::get_im_ac(data, offset);
         auto cmd = CMD::get_im_ac(inst);
         CMP::im_ac(cmd);
-        return inst.offset_end;
-
+        offset = REG::ip();
     }
+
+    else if (byte1 == 0b0111'0101)
+    {
+        auto inst = DATA::get_jump(data, offset);
+        auto cmd = CMD::get_jump(inst);
+        JUMP::jnz(cmd);
+        offset = REG::ip();
+    }
+    
 
     /*else if (byte1 == 0b0111'0100)
     {
@@ -1639,7 +1755,15 @@ static int decode_next(u8* data, int offset)
         set_jump(Op::jcxz);
     }*/
 
-    return -1;
+    else
+    {
+        offset = -1;
+    }
+
+    REG::print_trace();
+    printf("\n");
+
+    return offset;
 }
 
 
@@ -1661,10 +1785,15 @@ static void decode_bin_file(cstr bin_file)
 int main()
 {
     constexpr auto file_048 = "listing_0048_ip_register";
+    constexpr auto file_049 = "listing_0049_conditional_jumps";
 
     decode_bin_file(file_048);
 
     printf("\nFinal registers:\n");
     REG::print_all();
+
+    REG::reset();
+
+    decode_bin_file(file_049);
     
 }
