@@ -143,7 +143,9 @@ namespace REG
     static int si() { return (int)SI; }
     static int di() { return (int)DI; }
 
-    static int ip() { return (int)IP; }    
+    static int ip() { return (int)IP; }
+
+    static int zf() { return FLAGS & ZF; }
 
 
     static cstr get_flags_str()
@@ -511,12 +513,14 @@ namespace DATA
         int rm_b3 = -1;
         int d_b1 = -1;
         int w_b1 = -1;
+        int s_b1 = -1;
         int displo_b8 = -1;
         int disphi_b8 = -1;
         int imlo_b8 = -1;
         int imhi_b8 = -1;
         int addrlo_b8 = -1;
         int addrhi_b8 = -1;
+        int j_b8 = -1;
 
         int disp_sz = 0;
         int im_sz = 0;
@@ -525,6 +529,35 @@ namespace DATA
         int offset_begin = 0;
         int offset_end = 0;
     };
+
+
+    void print_binary(u8 value) 
+    {
+        printf("[");
+        for (int i = 7; i >= 4; --i) 
+        {
+            printf("%d", (value >> i) & 1);
+        }
+
+        printf(" ");
+
+        for (int i = 3; i >= 0; --i) 
+        {
+            printf("%d", (value >> i) & 1);
+        }
+        printf("]");
+    }
+
+
+    static void print_binary(u8* data, InstrData const& inst)
+    {
+        for (int o = inst.offset_begin; o < inst.offset_end; ++o)
+        {
+            print_binary(data[o]);
+        }
+
+        printf(" ");
+    }
 
 
     static int get_disp_sz(int mod_b2, int rm_b3)
@@ -630,6 +663,8 @@ namespace DATA
 
         REG::set_ip(in.offset_end);
 
+        //print_binary(data, in);
+
         return in;
     }
 
@@ -643,6 +678,7 @@ namespace DATA
 
         in.opcode = byte1 >> 1;
         in.w_b1 = byte1 & 0b0000'0001;
+        in.s_b1 = (byte1 & 0b0000'0010) >> 1;
         in.mod_b2 = byte2 >> 6;
         in.rm_b3 = byte2 & 0b00'000'111;
 
@@ -652,13 +688,15 @@ namespace DATA
             set_disp(in, data + offset + 2, disp_sz);
         }
 
-        auto im_sz = get_w_sz(in.w_b1);
+        auto im_sz = get_w_sz(in.w_b1 && !in.s_b1);
         set_im_data(in, data + offset + 2 + disp_sz, im_sz);
 
         in.offset_begin = offset;
         in.offset_end = offset + 2 + disp_sz + im_sz;
 
         REG::set_ip(in.offset_end);
+
+        //print_binary(data, in);
 
         return in;
     }
@@ -682,6 +720,8 @@ namespace DATA
 
         REG::set_ip(in.offset_end);
 
+        //print_binary(data, in);
+
         return in;
     }
 
@@ -703,6 +743,8 @@ namespace DATA
 
         REG::set_ip(in.offset_end);
 
+        //print_binary(data, in);
+
         return in;
     }
 
@@ -723,6 +765,25 @@ namespace DATA
         in.offset_end = offset + 1 + im_sz;
 
         REG::set_ip(in.offset_end);
+
+        //print_binary(data, in);
+
+        return in;
+    }
+
+
+    static InstrData get_jump(u8* data, int offset)
+    {
+        InstrData in{};   
+
+        auto byte1 = data[offset];
+
+        in.opcode = byte1;
+
+        in.j_b8 = data[offset + 1];
+
+        in.offset_begin = offset;
+        in.offset_end = offset + 2;
 
         return in;
     }
@@ -777,6 +838,13 @@ namespace CMD
     };
 
 
+    class Jump
+    {
+    public:
+        int j_offset = 0;
+    };
+
+
     static void print(RegMemReg const& cmd, cstr op)
     {
         char src[20] = { 0 };
@@ -821,6 +889,12 @@ namespace CMD
         auto src = cmd.src;
         auto dst = REG::decode(cmd.dst);
         printf("%s %s, %d", op, dst, src);
+    }
+
+
+    static void print(Jump const& j, cstr op)
+    {
+        printf("%s $%d", op, j.j_offset);
     }
 
 
@@ -870,7 +944,7 @@ namespace CMD
             res.disp = in_data.displo_b8 + (in_data.disphi_b8 << 8);
         }
 
-        if (in_data.im_sz == 1)
+        if (in_data.im_sz == 1 || in_data.s_b1 == 1)
         {
             res.src = in_data.imlo_b8;
         }
@@ -957,6 +1031,18 @@ namespace CMD
         {
             res.src = in_data.imlo_b8 + (in_data.imhi_b8 << 8);
         }
+
+        return res;
+    }
+
+
+    static Jump get_jump(DATA::InstrData const& in_data)
+    {
+        Jump res{};
+
+        auto j_b8 = in_data.j_b8;
+
+        res.j_offset = *((i8*)(&j_b8)) + in_data.offset_end - in_data.offset_begin;
 
         return res;
     }
@@ -1442,6 +1528,23 @@ namespace CMP
 }
 
 
+namespace JUMP
+{
+    static void jnz(CMD::Jump const& cmd)
+    {
+        CMD::print(cmd, "jnz");
+        if (REG::zf())
+        {
+            REG::set_ip(REG::ip() + 2);
+        }
+        else
+        {
+            REG::set_ip(REG::ip() + cmd.j_offset);
+        }
+    }
+}
+
+
 static int decode_next(u8* data, int offset)
 {
     auto byte1 = data[offset];
@@ -1465,35 +1568,35 @@ static int decode_next(u8* data, int offset)
         auto inst = DATA::get_rm_r(data, offset);
         auto cmd = CMD::get_rm_r(inst);
         MOV::rm_r(cmd);
-        offset = inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top7 == 0b0110'0011)
     {
         auto inst = DATA::get_im_rm(data, offset);
         auto cmd = CMD::get_im_rm(inst);
         MOV::im_rm(cmd);
-        offset = inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top4 == 0b0000'1011)
     {
         auto inst = DATA::get_mov_im_r(data, offset);
         auto cmd = CMD::get_im_r(inst);
         MOV::im_rm(cmd);
-        offset = inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top7 == 0b0110'0011)
     {
         auto inst = DATA::get_mov_m_ac(data, offset);
         auto cmd = CMD::get_m_ac(inst);
         MOV::m_ac(cmd);
-        offset = inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top7 == 0b0101'0001)
     {
         auto inst = DATA::get_mov_m_ac(data, offset);
         auto cmd = CMD::get_ac_m(inst);
         MOV::ac_m(cmd);
-        offset = inst.offset_end;
+        offset = REG::ip();
     }
 
     else if (byte1_top6 == 0b0000'0000)
@@ -1501,21 +1604,21 @@ static int decode_next(u8* data, int offset)
         auto inst = DATA::get_rm_r(data, offset);
         auto cmd = CMD::get_rm_r(inst);
         ADD::rm_r(cmd);
-        offset = inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0000)
     {
         auto inst = DATA::get_im_rm(data, offset);
         auto cmd = CMD::get_im_rm(inst);
         ADD::im_rm(cmd);
-        offset = inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top7 == 0b0001'0110)
     {
         auto inst = DATA::get_im_ac(data, offset);
         auto cmd = CMD::get_im_ac(inst);
         ADD::im_ac(cmd);
-        offset = inst.offset_end;
+        offset = REG::ip();
     }
 
     else if (byte1_top6 == 0b0000'1010)
@@ -1523,21 +1626,21 @@ static int decode_next(u8* data, int offset)
         auto inst = DATA::get_rm_r(data, offset);
         auto cmd = CMD::get_rm_r(inst);
         SUB::rm_r(cmd);
-        offset = inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0101)
     {
         auto inst = DATA::get_im_rm(data, offset);
         auto cmd = CMD::get_im_rm(inst);
         SUB::im_rm(cmd);
-        offset = inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top7 == 0b0001'0110)
     {
         auto inst = DATA::get_im_ac(data, offset);
         auto cmd = CMD::get_im_ac(inst);
         SUB::im_ac(cmd);
-        offset = inst.offset_end;
+        offset = REG::ip();
     }
 
     else if (byte1_top6 == 0b0000'1110)
@@ -1545,26 +1648,31 @@ static int decode_next(u8* data, int offset)
         auto inst = DATA::get_rm_r(data, offset);
         auto cmd = CMD::get_rm_r(inst);
         CMP::rm_r(cmd);
-        offset = inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0111)
     {
         auto inst = DATA::get_im_rm(data, offset);
         auto cmd = CMD::get_im_rm(inst);
         CMP::im_rm(cmd);
-        offset = inst.offset_end;
+        offset = REG::ip();
     }
     else if (byte1_top7 == 0b0001'1110)
     {
         auto inst = DATA::get_im_ac(data, offset);
         auto cmd = CMD::get_im_ac(inst);
         CMP::im_ac(cmd);
-        offset = inst.offset_end;
+        offset = REG::ip();
     }
-    else
+
+    else if (byte1 == 0b0111'0101)
     {
-        offset = -1;
+        auto inst = DATA::get_jump(data, offset);
+        auto cmd = CMD::get_jump(inst);
+        JUMP::jnz(cmd);
+        offset = REG::ip();
     }
+    
 
     /*else if (byte1 == 0b0111'0100)
     {
@@ -1647,6 +1755,11 @@ static int decode_next(u8* data, int offset)
         set_jump(Op::jcxz);
     }*/
 
+    else
+    {
+        offset = -1;
+    }
+
     REG::print_trace();
     printf("\n");
 
@@ -1672,10 +1785,15 @@ static void decode_bin_file(cstr bin_file)
 int main()
 {
     constexpr auto file_048 = "listing_0048_ip_register";
+    constexpr auto file_049 = "listing_0049_conditional_jumps";
 
     decode_bin_file(file_048);
 
     printf("\nFinal registers:\n");
     REG::print_all();
+
+    REG::reset();
+
+    decode_bin_file(file_049);
     
 }
