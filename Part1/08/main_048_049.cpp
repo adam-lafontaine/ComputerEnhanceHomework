@@ -104,6 +104,7 @@ namespace REG
     constexpr int ZF = 0b0000'0000'0000'0001;
     constexpr int SF = 0b0000'0000'0000'0010;
     constexpr int PF = 0b0000'0000'0000'0100;
+    constexpr int CF = 0b0000'0000'0000'1000;
 
     static u16 AX = 0;
     static u16 BX = 0;
@@ -113,8 +114,11 @@ namespace REG
     static u16 BP = 0;
     static u16 SI = 0;
     static u16 DI = 0;
+    static u16 IP = 0;
 
     static u16 FLAGS = 0;
+
+    static char trace_ip[20] = { 0 };
 
 
     static int ax() { return (int)AX; }
@@ -136,6 +140,23 @@ namespace REG
     static int bp() { return (int)BP; }
     static int si() { return (int)SI; }
     static int di() { return (int)DI; }
+
+    static int ip() { return (int)IP; }
+
+
+    static void set_ip(int v)
+    {
+        int old = IP;
+        IP = (u16)v;
+        memset(trace_ip, 0, sizeof(trace_ip));
+        snprintf(trace_ip, sizeof(trace_ip), "ip:0x%x->0x%x", old, v);
+    }
+
+
+    static void print_trace_ip()
+    {
+        printf(" %s", trace_ip);
+    }
 
 
     static void set_flags(u16 reg)
@@ -230,6 +251,8 @@ namespace REG
         si,
         di,
 
+        ip,
+
         none = -1
     };
 
@@ -309,6 +332,8 @@ namespace REG
         case R::bp: return "bp";
         case R::si: return "si";
         case R::di: return "di";
+
+        case R::ip: return "ip";
         }
 
         return "err";
@@ -428,6 +453,7 @@ namespace REG
         print("bp", bp());
         print("si", si());
         print("di", di());
+        print("ip", ip());
 
         printf("flags: %s", get_flags());
     }
@@ -443,6 +469,7 @@ namespace REG
         BP = 0;
         SI = 0;
         DI = 0;
+        IP = 0;
     }
 }
 
@@ -575,6 +602,8 @@ namespace DATA
         in.offset_begin = offset;
         in.offset_end = offset + 2 + disp_sz;
 
+        REG::set_ip(in.offset_end);
+
         return in;
     }
 
@@ -603,6 +632,8 @@ namespace DATA
         in.offset_begin = offset;
         in.offset_end = offset + 2 + disp_sz + im_sz;
 
+        REG::set_ip(in.offset_end);
+
         return in;
     }
 
@@ -623,6 +654,8 @@ namespace DATA
         in.offset_begin = offset;
         in.offset_end = offset + 1 + im_sz;
 
+        REG::set_ip(in.offset_end);
+
         return in;
     }
 
@@ -642,6 +675,8 @@ namespace DATA
         in.offset_begin = offset;
         in.offset_end = offset + 1 + addr_sz;
 
+        REG::set_ip(in.offset_end);
+
         return in;
     }
 
@@ -660,6 +695,8 @@ namespace DATA
 
         in.offset_begin = offset;
         in.offset_end = offset + 1 + im_sz;
+
+        REG::set_ip(in.offset_end);
 
         return in;
     }
@@ -968,8 +1005,6 @@ namespace MOV
         {
             f(val);
         }
-
-        printf("\n");
     }
 
 
@@ -983,22 +1018,18 @@ namespace MOV
         {
             f(val);
         }
-        
-        printf("\n");
     }
 
 
     static void m_ac(CMD::MemAcc const& cmd)
     {
         CMD::print(cmd, "mov");
-        printf("\n");
     }
 
 
     static void ac_m(CMD::AccMem const& cmd)
     {
         CMD::print(cmd, "mov");
-        printf("\n");
     }
 }
 
@@ -1106,7 +1137,6 @@ namespace ADD
         auto flags2 = REG::get_flags();
 
         printf(" flags:%s->%s", flags1, flags2);
-        printf("\n");
     }
 
 
@@ -1126,7 +1156,6 @@ namespace ADD
         auto flags2 = REG::get_flags();
 
         printf(" flags:%s->%s", flags1, flags2);
-        printf("\n");
     }
 
 
@@ -1146,7 +1175,6 @@ namespace ADD
         auto flags2 = REG::get_flags();
 
         printf(" flags:%s->%s", flags1, flags2);
-        printf("\n");
     }
 }
 
@@ -1390,7 +1418,6 @@ namespace CMP
         auto flags2 = REG::get_flags();
 
         printf(" flags:%s->%s", flags1, flags2);
-        printf("\n");
     }
 
 
@@ -1410,7 +1437,6 @@ namespace CMP
         auto flags2 = REG::get_flags();
 
         printf(" flags:%s->%s", flags1, flags2);
-        printf("\n");
     }
 
 
@@ -1430,7 +1456,6 @@ namespace CMP
         auto flags2 = REG::get_flags();
 
         printf(" flags:%s->%s", flags1, flags2);
-        printf("\n");
     }
 }
 
@@ -1458,35 +1483,35 @@ static int decode_next(u8* data, int offset)
         auto inst = DATA::get_rm_r(data, offset);
         auto cmd = CMD::get_rm_r(inst);
         MOV::rm_r(cmd);
-        return inst.offset_end;
+        offset = inst.offset_end;
     }
     else if (byte1_top7 == 0b0110'0011)
     {
         auto inst = DATA::get_im_rm(data, offset);
         auto cmd = CMD::get_im_rm(inst);
         MOV::im_rm(cmd);
-        return inst.offset_end;
+        offset = inst.offset_end;
     }
     else if (byte1_top4 == 0b0000'1011)
     {
         auto inst = DATA::get_mov_im_r(data, offset);
         auto cmd = CMD::get_im_r(inst);
         MOV::im_rm(cmd);
-        return inst.offset_end;
+        offset = inst.offset_end;
     }
     else if (byte1_top7 == 0b0110'0011)
     {
         auto inst = DATA::get_mov_m_ac(data, offset);
         auto cmd = CMD::get_m_ac(inst);
         MOV::m_ac(cmd);
-        return inst.offset_end;
+        offset = inst.offset_end;
     }
     else if (byte1_top7 == 0b0101'0001)
     {
         auto inst = DATA::get_mov_m_ac(data, offset);
         auto cmd = CMD::get_ac_m(inst);
         MOV::ac_m(cmd);
-        return inst.offset_end;
+        offset = inst.offset_end;
     }
 
     else if (byte1_top6 == 0b0000'0000)
@@ -1494,22 +1519,21 @@ static int decode_next(u8* data, int offset)
         auto inst = DATA::get_rm_r(data, offset);
         auto cmd = CMD::get_rm_r(inst);
         ADD::rm_r(cmd);
-        return inst.offset_end;
+        offset = inst.offset_end;
     }
     else if (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0000)
     {
         auto inst = DATA::get_im_rm(data, offset);
         auto cmd = CMD::get_im_rm(inst);
         ADD::im_rm(cmd);
-        return inst.offset_end;
+        offset = inst.offset_end;
     }
     else if (byte1_top7 == 0b0001'0110)
     {
         auto inst = DATA::get_im_ac(data, offset);
         auto cmd = CMD::get_im_ac(inst);
         ADD::im_ac(cmd);
-        return inst.offset_end;
-
+        offset = inst.offset_end;
     }
 
     else if (byte1_top6 == 0b0000'1010)
@@ -1517,22 +1541,21 @@ static int decode_next(u8* data, int offset)
         auto inst = DATA::get_rm_r(data, offset);
         auto cmd = CMD::get_rm_r(inst);
         SUB::rm_r(cmd);
-        return inst.offset_end;
+        offset = inst.offset_end;
     }
     else if (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0101)
     {
         auto inst = DATA::get_im_rm(data, offset);
         auto cmd = CMD::get_im_rm(inst);
         SUB::im_rm(cmd);
-        return inst.offset_end;
+        offset = inst.offset_end;
     }
     else if (byte1_top7 == 0b0001'0110)
     {
         auto inst = DATA::get_im_ac(data, offset);
         auto cmd = CMD::get_im_ac(inst);
         SUB::im_ac(cmd);
-        return inst.offset_end;
-
+        offset = inst.offset_end;
     }
 
     else if (byte1_top6 == 0b0000'1110)
@@ -1540,22 +1563,25 @@ static int decode_next(u8* data, int offset)
         auto inst = DATA::get_rm_r(data, offset);
         auto cmd = CMD::get_rm_r(inst);
         CMP::rm_r(cmd);
-        return inst.offset_end;
+        offset = inst.offset_end;
     }
     else if (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0111)
     {
         auto inst = DATA::get_im_rm(data, offset);
         auto cmd = CMD::get_im_rm(inst);
         CMP::im_rm(cmd);
-        return inst.offset_end;
+        offset = inst.offset_end;
     }
     else if (byte1_top7 == 0b0001'1110)
     {
         auto inst = DATA::get_im_ac(data, offset);
         auto cmd = CMD::get_im_ac(inst);
         CMP::im_ac(cmd);
-        return inst.offset_end;
-
+        offset = inst.offset_end;
+    }
+    else
+    {
+        offset = -1;
     }
 
     /*else if (byte1 == 0b0111'0100)
@@ -1639,7 +1665,10 @@ static int decode_next(u8* data, int offset)
         set_jump(Op::jcxz);
     }*/
 
-    return -1;
+    REG::print_trace_ip();
+    printf("\n");
+
+    return offset;
 }
 
 
