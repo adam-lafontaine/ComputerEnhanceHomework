@@ -212,6 +212,194 @@ namespace REG
     }
 
 
+    enum class Reg : int
+    {
+        al,
+        bl,
+        cl,
+        dl,
+
+        ah,
+        bh,
+        ch,
+        dh,
+
+        ax,
+        bx,
+        cx,
+        dx,
+        
+        sp,
+        bp,
+        si,
+        di,
+
+        ip,
+
+        none = -1
+    };
+
+
+    Reg get_reg(int reg_b3, int w)
+    {
+        using R = REG::Reg;
+
+        if (w)
+        {
+            switch (reg_b3)
+            {
+            case 0: return R::ax;
+            case 1: return R::cx;
+            case 2: return R::dx;
+            case 3: return R::bx;
+            case 4: return R::sp;
+            case 5: return R::bp;
+            case 6: return R::si;
+            case 7: return R::di;
+            }
+        }
+        else
+        {
+            switch (reg_b3)
+            {
+            case 0: return R::al;
+            case 1: return R::cl;
+            case 2: return R::dl;
+            case 3: return R::bl;
+            case 4: return R::ah;
+            case 5: return R::ch;
+            case 6: return R::dh;
+            case 7: return R::bh;
+            }
+        }
+
+        return R::none;
+    }
+
+
+    static cstr reg_str(Reg r)
+    {
+        using R = REG::Reg;
+
+        switch (r)
+        {
+        case R::ax: return "ax";
+        case R::bx: return "bx";
+        case R::cx: return "cx";
+        case R::dx: return "dx";
+        
+        case R::ah: return "ah";
+        case R::bh: return "bh";
+        case R::ch: return "ch";
+        case R::dh: return "dh";
+
+        case R::al: return "al";
+        case R::bl: return "bl";
+        case R::cl: return "cl";
+        case R::dl: return "dl";
+
+        case R::sp: return "sp";
+        case R::bp: return "bp";
+        case R::si: return "si";
+        case R::di: return "di";
+
+        case R::ip: return "ip";
+        }
+
+        return "err";
+    }
+
+
+    static int get_value(Reg r)
+    {
+        using R = REG::Reg;
+
+        switch (r)
+        {
+        case R::ax: return ax();
+        case R::bx: return bx();
+        case R::cx: return cx();
+        case R::dx: return dx();
+        
+        case R::ah: return ah();
+        case R::bh: return bh();
+        case R::ch: return ch();
+        case R::dh: return dh();
+
+        case R::al: return al();
+        case R::bl: return bl();
+        case R::cl: return cl();
+        case R::dl: return dl();
+
+        case R::sp: return sp();
+        case R::bp: return bp();
+        case R::si: return si();
+        case R::di: return di();
+        }
+
+        return -1;
+    }
+
+
+    static void set_reg_value(u16& reg, Reg name, int v)
+    {
+        auto old = reg;
+        reg = (u16)v;
+        memset(trace_reg, 0, sizeof(trace_reg));
+        snprintf(trace_reg, sizeof(trace_reg), "%s:0x%x->0x%x", reg_str(name), old, reg);
+
+        set_flags(reg);
+    }
+    
+
+    static void print_all()
+    {
+        auto const print = [](cstr str, int val){ printf("%s: 0x%04x (%d)\n", str, val, val); };
+
+        print("ax", ax());
+        print("bx", bx());
+        print("cx", cx());
+        print("dx", dx());
+        print("sp", sp());
+        print("bp", bp());
+        print("si", si());
+        print("di", di());
+        print("ip", ip());
+
+        printf("flags: %s\n", get_flags_str());
+    }
+    
+    
+    static void set_ip(int v)
+    {
+        int old = IP;
+        IP = (u16)v;
+        memset(trace_ip, 0, sizeof(trace_ip));
+        snprintf(trace_ip, sizeof(trace_ip), "ip:0x%x->0x%x", old, v);
+    }
+
+
+    static void reset()
+    {
+        AX = 0;
+        BX = 0;
+        CX = 0;
+        DX = 0;
+        SP = 0;
+        BP = 0;
+        SI = 0;
+        DI = 0;
+        IP = 0;
+
+        memset(MEM, 0, sizeof(MEM));
+    }
+}
+
+
+// old
+
+namespace REG
+{
     enum class Name : int
     {
         m_bx_si,
@@ -267,7 +455,7 @@ namespace REG
     };
 
 
-    Name get_reg(int reg_b3, int w)
+    Name get_reg2(int reg_b3, int w)
     {
         using R = REG::Name;
 
@@ -308,7 +496,7 @@ namespace REG
     {
         if (mod_b2 == 0b11)
         {
-            return get_reg(rm_b3, w_b1);
+            return get_reg2(rm_b3, w_b1);
         }
 
         return (Name)(mod_b2 * 8 + rm_b3);        
@@ -361,7 +549,7 @@ namespace REG
         }
 
         if (r == R::m_direct_address)
-        {
+        {            
             snprintf(str, 10, "%d", disp);
             return;
         }
@@ -451,24 +639,6 @@ namespace REG
     }
 
 
-    static void print_all()
-    {
-        auto const print = [](cstr str, int val){ printf("%s: 0x%04x (%d)\n", str, val, val); };
-
-        print("ax", ax());
-        print("bx", bx());
-        print("cx", cx());
-        print("dx", dx());
-        print("sp", sp());
-        print("bp", bp());
-        print("si", si());
-        print("di", di());
-        print("ip", ip());
-
-        printf("flags: %s\n", get_flags_str());
-    }
-
-
     static void set_reg(u16& reg, Name name, int v)
     {
         auto old = reg;
@@ -478,31 +648,7 @@ namespace REG
 
         set_flags(reg);
     }
-    
-    
-    static void set_ip(int v)
-    {
-        int old = IP;
-        IP = (u16)v;
-        memset(trace_ip, 0, sizeof(trace_ip));
-        snprintf(trace_ip, sizeof(trace_ip), "ip:0x%x->0x%x", old, v);
-    }
 
-
-    static void reset()
-    {
-        AX = 0;
-        BX = 0;
-        CX = 0;
-        DX = 0;
-        SP = 0;
-        BP = 0;
-        SI = 0;
-        DI = 0;
-        IP = 0;
-
-        memset(MEM, 0, sizeof(MEM));
-    }
 }
 
 
@@ -798,6 +944,8 @@ namespace CMD
 {
     using RM = REG::Name;
 
+    using Reg = REG::Reg;
+
     class RegMemReg
     {
     public:
@@ -812,9 +960,16 @@ namespace CMD
     {
     public:
         int src = -1;
-        RM dst = RM::none;
 
         int disp = -1;
+    };
+
+
+    class ImReg
+    {
+    public:
+        int src = -1;
+        Reg dst = Reg::none;        
     };
 
 
@@ -861,14 +1016,10 @@ namespace CMD
     }
 
 
-    static void print(ImRegMem const& cmd, cstr op)
+    static void print(ImReg const& cmd, cstr op)
     {
         auto src = cmd.src;
-        char dst[20] = { 0 };
-
-        REG::print_decode(cmd.dst, cmd.disp, dst);
-
-        printf("%s %s, %d", op, dst, src);
+        printf("%s %s, %d", op, REG::reg_str(cmd.dst), src);
     }
 
 
@@ -906,7 +1057,7 @@ namespace CMD
     {
         RegMemReg res{};
 
-        auto r = REG::get_reg(in_data.reg_b3, in_data.w_b1);
+        /*auto r = REG::get_reg(in_data.reg_b3, in_data.w_b1);
         auto rm = REG::get_reg_mem(in_data.mod_b2, in_data.rm_b3, in_data.w_b1);
 
         if (in_data.d_b1)
@@ -927,17 +1078,17 @@ namespace CMD
         else if (in_data.disp_sz == 2)
         {
             res.disp = in_data.displo_b8 + (in_data.disphi_b8 << 8);
-        }
+        }*/
 
         return res;
     }
 
 
-    static ImRegMem get_im_rm(DATA::InstrData const& in_data)
+    static ImReg get_im_rm(DATA::InstrData const& in_data)
     {
-        ImRegMem res{};
+        ImReg res{};
 
-        res.dst = REG::get_reg_mem(in_data.mod_b2, in_data.rm_b3, in_data.w_b1);
+        /*res.dst = REG::get_reg_mem(in_data.mod_b2, in_data.rm_b3, in_data.w_b1);
 
         if (in_data.disp_sz == 1)
         {
@@ -955,26 +1106,17 @@ namespace CMD
         else if (in_data.im_sz == 2)
         {
             res.src = in_data.imlo_b8 + (in_data.imhi_b8 << 8);
-        }
+        }*/
 
         return res;
     }
 
 
-    static ImRegMem get_im_r(DATA::InstrData const& in_data)
+    static ImReg get_im_r(DATA::InstrData const& in_data)
     {
-        ImRegMem res{};
+        ImReg res{};
 
         res.dst = REG::get_reg(in_data.reg_b3, in_data.w_b1);
-
-        if (in_data.disp_sz == 1)
-        {
-            res.disp = in_data.displo_b8;
-        }
-        else if (in_data.disp_sz == 2)
-        {
-            res.disp = in_data.displo_b8 + (in_data.disphi_b8 << 8);
-        }
 
         if (in_data.im_sz == 1)
         {
@@ -1055,7 +1197,7 @@ namespace CMD
 
 namespace MOV
 {
-    using R = REG::Name;
+    using R = REG::Reg;
 
     typedef void (*func_t)(int);
 
@@ -1072,25 +1214,25 @@ namespace MOV
     }
 
 
-    static void ax(int v) { REG::set_reg(REG::AX, R::ax, v); }
-    static void bx(int v) { REG::set_reg(REG::BX, R::bx, v); }
-    static void cx(int v) { REG::set_reg(REG::CX, R::cx, v); }
-    static void dx(int v) { REG::set_reg(REG::DX, R::dx, v); }
+    static void ax(int v) { REG::set_reg_value(REG::AX, R::ax, v); }
+    static void bx(int v) { REG::set_reg_value(REG::BX, R::bx, v); }
+    static void cx(int v) { REG::set_reg_value(REG::CX, R::cx, v); }
+    static void dx(int v) { REG::set_reg_value(REG::DX, R::dx, v); }
 
-    static void ah(int v) { REG::set_reg(REG::AX, R::ax, set_high(REG::AX, v)); }
-    static void bh(int v) { REG::set_reg(REG::BX, R::bx, set_high(REG::BX, v)); }
-    static void ch(int v) { REG::set_reg(REG::DX, R::cx, set_high(REG::CX, v)); }
-    static void dh(int v) { REG::set_reg(REG::DX, R::dx, set_high(REG::DX, v)); }
+    static void ah(int v) { REG::set_reg_value(REG::AX, R::ax, set_high(REG::AX, v)); }
+    static void bh(int v) { REG::set_reg_value(REG::BX, R::bx, set_high(REG::BX, v)); }
+    static void ch(int v) { REG::set_reg_value(REG::DX, R::cx, set_high(REG::CX, v)); }
+    static void dh(int v) { REG::set_reg_value(REG::DX, R::dx, set_high(REG::DX, v)); }
 
-    static void al(int v) { REG::set_reg(REG::AX, R::ax, set_low(REG::AX, v)); }
-    static void bl(int v) { REG::set_reg(REG::BX, R::bx, set_low(REG::BX, v)); }
-    static void cl(int v) { REG::set_reg(REG::DX, R::cx, set_low(REG::CX, v)); }
-    static void dl(int v) { REG::set_reg(REG::DX, R::dx, set_low(REG::DX, v)); }
+    static void al(int v) { REG::set_reg_value(REG::AX, R::ax, set_low(REG::AX, v)); }
+    static void bl(int v) { REG::set_reg_value(REG::BX, R::bx, set_low(REG::BX, v)); }
+    static void cl(int v) { REG::set_reg_value(REG::DX, R::cx, set_low(REG::CX, v)); }
+    static void dl(int v) { REG::set_reg_value(REG::DX, R::dx, set_low(REG::DX, v)); }
 
-    static void sp(int v) { REG::set_reg(REG::SP, R::sp, v); }
-    static void bp(int v) { REG::set_reg(REG::BP, R::bp, v); }
-    static void si(int v) { REG::set_reg(REG::SI, R::si, v); }
-    static void di(int v) { REG::set_reg(REG::DI, R::di, v); }
+    static void sp(int v) { REG::set_reg_value(REG::SP, R::sp, v); }
+    static void bp(int v) { REG::set_reg_value(REG::BP, R::bp, v); }
+    static void si(int v) { REG::set_reg_value(REG::SI, R::si, v); }
+    static void di(int v) { REG::set_reg_value(REG::DI, R::di, v); }
 
     static void no_op(int) {}
 
@@ -1128,25 +1270,25 @@ namespace MOV
     {
         CMD::print(cmd, "mov");
 
-        auto f = get_mov_f(cmd.dst);
+        /*auto f = get_mov_f(cmd.dst);
         auto val = REG::get_value(cmd.src);
         if (val >= 0)
         {
             f(val);
-        }
+        }*/
     }
 
 
-    static void im_rm(CMD::ImRegMem const& cmd)
+    static void im_rm(CMD::ImReg const& cmd)
     {
         CMD::print(cmd, "mov");
 
-        auto f = get_mov_f(cmd.dst);
+        /*auto f = get_mov_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
         {
             f(val);
-        }
+        }*/
     }
 
 
@@ -1263,16 +1405,16 @@ namespace ADD
     }
 
 
-    static void im_rm(CMD::ImRegMem const& cmd)
+    static void im_rm(CMD::ImReg const& cmd)
     {
         CMD::print(cmd, "add");
 
-        auto f = get_add_f(cmd.dst);
+        /*auto f = get_add_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
         {
             f(val);
-        }
+        }*/
     }
 
 
@@ -1390,16 +1532,16 @@ namespace SUB
     }
 
 
-    static void im_rm(CMD::ImRegMem const& cmd)
+    static void im_rm(CMD::ImReg const& cmd)
     {
         CMD::print(cmd, "sub");
 
-        auto f = get_sub_f(cmd.dst);
+        /*auto f = get_sub_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
         {
             f(val);
-        }
+        }*/
     }
 
 
@@ -1505,16 +1647,16 @@ namespace CMP
     }
 
 
-    static void im_rm(CMD::ImRegMem const& cmd)
+    static void im_rm(CMD::ImReg const& cmd)
     {
         CMD::print(cmd, "cmp");
 
-        auto f = get_cmp_f(cmd.dst);
+        /*auto f = get_cmp_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
         {
             f(val);
-        }
+        }*/
     }
 
 
@@ -1699,10 +1841,11 @@ static void decode_bin_file(cstr bin_file)
 
 int main()
 {
+    constexpr auto file_043 = "../06/listing_0043_immediate_movs";
     constexpr auto file_051 = "listing_0051_memory_mov";
     constexpr auto file_052 = "listing_0052_memory_add_loop";
 
-    decode_bin_file(file_051);
+    decode_bin_file(file_043);
 
     printf("\nFinal registers:\n");
     REG::print_all();
