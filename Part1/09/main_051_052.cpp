@@ -826,7 +826,7 @@ namespace DATA
         auto byte1 = data[offset];
         auto byte2 = data[offset + 1];
 
-        in.opcode = byte1 >> 1;
+        in.opcode = byte1 >> 2;
         in.w_b1 = byte1 & 0b0000'0001;
         in.s_b1 = (byte1 & 0b0000'0010) >> 1;
         in.mod_b2 = byte2 >> 6;
@@ -1099,23 +1099,31 @@ namespace CMD
     }
 
 
-    static bool is_r2r(DATA::InstrData const& in_data)
+    static bool is_r_r(DATA::InstrData const& in_data)
     {
         return 
-            in_data.opcode == 0b100010 &&
             in_data.mod_b2 == 0b11;
     }
 
 
-    static bool is_rm2r(DATA::InstrData const& in_data)
+    static bool is_rm_r(DATA::InstrData const& in_data)
     {
         return false;
     }
 
 
-    static bool is_r2rm(DATA::InstrData const& in_data)
+    static bool is_r_rm(DATA::InstrData const& in_data)
     {
         return false;
+    }
+
+
+    static bool is_im_r(DATA::InstrData const& in_data)
+    {
+        return
+            in_data.opcode == 0b100000 &&
+            in_data.mod_b2 == 0b11 &&
+            (in_data.im_sz == 1 || in_data.im_sz == 2);
     }
 
 
@@ -1148,6 +1156,25 @@ namespace CMD
 
 
     static Im2Reg get_im_r(DATA::InstrData const& in_data)
+    {
+        Im2Reg res{};
+
+        res.dst = REG::get_reg(in_data.rm_b3, in_data.w_b1);
+
+        if (in_data.im_sz == 1)
+        {
+            res.src = in_data.imlo_b8;
+        }
+        else if (in_data.im_sz == 2)
+        {
+            res.src = in_data.imlo_b8 + (in_data.imhi_b8 << 8);
+        }
+
+        return res;
+    }
+
+
+    static Im2Reg get_mov_im_r(DATA::InstrData const& in_data)
     {
         Im2Reg res{};
 
@@ -1351,16 +1378,16 @@ namespace MOV
 
     static void rm_r(DATA::InstrData const& in_data)
     {
-        if (CMD::is_r2r(in_data))
+        if (CMD::is_r_r(in_data))
         {
             auto cmd = CMD::get_r_r(in_data);
             r_r(cmd);
         }
-        else if (CMD::is_r2rm(in_data))
+        else if (CMD::is_r_rm(in_data))
         {
 
         }
-        else if (CMD::is_rm2r(in_data))
+        else if (CMD::is_rm_r(in_data))
         {
 
         }
@@ -1371,8 +1398,9 @@ namespace MOV
     }
 
 
-    static void im_r(CMD::Im2Reg const& cmd)
+    static void im_r(DATA::InstrData const& in_data)
     {
+        auto cmd = CMD::get_mov_im_r(in_data);
         CMD::print(cmd, "mov");
 
         auto f = get_mov_f(cmd.dst);
@@ -1412,7 +1440,7 @@ namespace MOV
 
 namespace ADD
 {
-    using R = REG::Name;
+    using R = REG::Reg;
 
     typedef void (*func_t)(int);
 
@@ -1445,25 +1473,25 @@ namespace ADD
     }
 
 
-    static void ax(int v) { REG::set_reg(REG::AX, R::ax, REG::AX + v); }
-    static void bx(int v) { REG::set_reg(REG::BX, R::bx, REG::BX + v); }
-    static void cx(int v) { REG::set_reg(REG::CX, R::cx, REG::CX + v); }
-    static void dx(int v) { REG::set_reg(REG::DX, R::dx, REG::DX + v); }
+    static void ax(int v) { REG::set_reg_value(REG::AX, R::ax, REG::AX + v); }
+    static void bx(int v) { REG::set_reg_value(REG::BX, R::bx, REG::BX + v); }
+    static void cx(int v) { REG::set_reg_value(REG::CX, R::cx, REG::CX + v); }
+    static void dx(int v) { REG::set_reg_value(REG::DX, R::dx, REG::DX + v); }
 
-    static void ah(int v) { REG::set_reg(REG::AX, R::ax, add_high(REG::AX, v)); }
-    static void bh(int v) { REG::set_reg(REG::BX, R::bx, add_high(REG::BX, v)); }
-    static void ch(int v) { REG::set_reg(REG::CX, R::cx, add_high(REG::CX, v)); }
-    static void dh(int v) { REG::set_reg(REG::DX, R::dx, add_high(REG::DX, v)); }
+    static void ah(int v) { REG::set_reg_value(REG::AX, R::ax, add_high(REG::AX, v)); }
+    static void bh(int v) { REG::set_reg_value(REG::BX, R::bx, add_high(REG::BX, v)); }
+    static void ch(int v) { REG::set_reg_value(REG::CX, R::cx, add_high(REG::CX, v)); }
+    static void dh(int v) { REG::set_reg_value(REG::DX, R::dx, add_high(REG::DX, v)); }
 
-    static void al(int v) { REG::set_reg(REG::AX, R::ax, add_low(REG::AX, v)); }
-    static void bl(int v) { REG::set_reg(REG::BX, R::bx, add_low(REG::BX, v)); }
-    static void cl(int v) { REG::set_reg(REG::CX, R::cx, add_low(REG::CX, v)); }
-    static void dl(int v) { REG::set_reg(REG::CX, R::cx, add_low(REG::DX, v)); }
+    static void al(int v) { REG::set_reg_value(REG::AX, R::ax, add_low(REG::AX, v)); }
+    static void bl(int v) { REG::set_reg_value(REG::BX, R::bx, add_low(REG::BX, v)); }
+    static void cl(int v) { REG::set_reg_value(REG::CX, R::cx, add_low(REG::CX, v)); }
+    static void dl(int v) { REG::set_reg_value(REG::CX, R::cx, add_low(REG::DX, v)); }
 
-    static void sp(int v) { REG::set_reg(REG::SP, R::sp, REG::SP + v); }
-    static void bp(int v) { REG::set_reg(REG::BP, R::bp, REG::BP + v); }
-    static void si(int v) { REG::set_reg(REG::SI, R::si, REG::SI + v); }
-    static void di(int v) { REG::set_reg(REG::DI, R::di, REG::DI + v); }
+    static void sp(int v) { REG::set_reg_value(REG::SP, R::sp, REG::SP + v); }
+    static void bp(int v) { REG::set_reg_value(REG::BP, R::bp, REG::BP + v); }
+    static void si(int v) { REG::set_reg_value(REG::SI, R::si, REG::SI + v); }
+    static void di(int v) { REG::set_reg_value(REG::DI, R::di, REG::DI + v); }
 
     static void no_op(int) {}
 
@@ -1499,23 +1527,10 @@ namespace ADD
 
     static void rm_r(CMD::RegMemReg const& cmd)
     {
-        CMD::print(cmd, "add");
+        /*CMD::print(cmd, "add");
 
         auto f = get_add_f(cmd.dst);
         auto val = REG::get_value(cmd.src);
-        if (val >= 0)
-        {
-            f(val);
-        }
-    }
-
-
-    static void im_rm(CMD::Im2Reg const& cmd)
-    {
-        CMD::print(cmd, "add");
-
-        /*auto f = get_add_f(cmd.dst);
-        auto val = cmd.src;
         if (val >= 0)
         {
             f(val);
@@ -1525,6 +1540,19 @@ namespace ADD
 
     static void im_ac(CMD::ImAcc const& cmd)
     {
+        /*CMD::print(cmd, "add");
+
+        auto f = get_add_f(cmd.dst);
+        auto val = cmd.src;
+        if (val >= 0)
+        {
+            f(val);
+        }*/
+    }
+
+
+    static void im_r(CMD::Im2Reg const& cmd)
+    {
         CMD::print(cmd, "add");
 
         auto f = get_add_f(cmd.dst);
@@ -1534,12 +1562,26 @@ namespace ADD
             f(val);
         }
     }
+
+
+    static void im_rm(DATA::InstrData const& in_data)
+    {
+        if (CMD::is_im_r(in_data))
+        {
+            auto cmd = CMD::get_im_r(in_data);
+            im_r(cmd);
+        }
+        else
+        {
+            printf("X im_r");
+        }
+    }
 }
 
 
 namespace SUB
 {
-    using R = REG::Name;
+    using R = REG::Reg;
 
     typedef void (*func_t)(int);
 
@@ -1572,25 +1614,25 @@ namespace SUB
     }
 
 
-    static void ax(int v) { REG::set_reg(REG::AX, R::ax, REG::AX - v); }
-    static void bx(int v) { REG::set_reg(REG::BX, R::bx, REG::BX - v); }
-    static void cx(int v) { REG::set_reg(REG::CX, R::cx, REG::CX - v); }
-    static void dx(int v) { REG::set_reg(REG::DX, R::dx, REG::DX - v); }
+    static void ax(int v) { REG::set_reg_value(REG::AX, R::ax, REG::AX - v); }
+    static void bx(int v) { REG::set_reg_value(REG::BX, R::bx, REG::BX - v); }
+    static void cx(int v) { REG::set_reg_value(REG::CX, R::cx, REG::CX - v); }
+    static void dx(int v) { REG::set_reg_value(REG::DX, R::dx, REG::DX - v); }
 
-    static void ah(int v) { REG::set_reg(REG::AX, R::ax, sub_high(REG::AX, v)); }
-    static void bh(int v) { REG::set_reg(REG::BX, R::bx, sub_high(REG::BX, v)); }
-    static void ch(int v) { REG::set_reg(REG::CX, R::cx, sub_high(REG::CX, v)); }
-    static void dh(int v) { REG::set_reg(REG::DX, R::dx, sub_high(REG::DX, v)); }
+    static void ah(int v) { REG::set_reg_value(REG::AX, R::ax, sub_high(REG::AX, v)); }
+    static void bh(int v) { REG::set_reg_value(REG::BX, R::bx, sub_high(REG::BX, v)); }
+    static void ch(int v) { REG::set_reg_value(REG::CX, R::cx, sub_high(REG::CX, v)); }
+    static void dh(int v) { REG::set_reg_value(REG::DX, R::dx, sub_high(REG::DX, v)); }
 
-    static void al(int v) { REG::set_reg(REG::AX, R::ax, sub_low(REG::AX, v)); }
-    static void bl(int v) { REG::set_reg(REG::BX, R::bx, sub_low(REG::BX, v)); }
-    static void cl(int v) { REG::set_reg(REG::CX, R::cx, sub_low(REG::CX, v)); }
-    static void dl(int v) { REG::set_reg(REG::CX, R::cx, sub_low(REG::DX, v)); }
+    static void al(int v) { REG::set_reg_value(REG::AX, R::ax, sub_low(REG::AX, v)); }
+    static void bl(int v) { REG::set_reg_value(REG::BX, R::bx, sub_low(REG::BX, v)); }
+    static void cl(int v) { REG::set_reg_value(REG::CX, R::cx, sub_low(REG::CX, v)); }
+    static void dl(int v) { REG::set_reg_value(REG::CX, R::cx, sub_low(REG::DX, v)); }
 
-    static void sp(int v) { REG::set_reg(REG::SP, R::sp, REG::SP - v); }
-    static void bp(int v) { REG::set_reg(REG::BP, R::bp, REG::BP - v); }
-    static void si(int v) { REG::set_reg(REG::SI, R::si, REG::SI - v); }
-    static void di(int v) { REG::set_reg(REG::DI, R::di, REG::DI - v); }
+    static void sp(int v) { REG::set_reg_value(REG::SP, R::sp, REG::SP - v); }
+    static void bp(int v) { REG::set_reg_value(REG::BP, R::bp, REG::BP - v); }
+    static void si(int v) { REG::set_reg_value(REG::SI, R::si, REG::SI - v); }
+    static void di(int v) { REG::set_reg_value(REG::DI, R::di, REG::DI - v); }
 
     static void no_op(int) {}
 
@@ -1624,7 +1666,7 @@ namespace SUB
     }
 
 
-    static void rm_r(CMD::RegMemReg const& cmd)
+    static void r_r(CMD::Reg2Reg const& cmd)
     {
         CMD::print(cmd, "sub");
 
@@ -1634,6 +1676,19 @@ namespace SUB
         {
             f(val);
         }
+    }
+
+
+    static void rm_r(CMD::RegMemReg const& cmd)
+    {
+        CMD::print(cmd, "sub");
+
+        /*auto f = get_sub_f(cmd.dst);
+        auto val = REG::get_value(cmd.src);
+        if (val >= 0)
+        {
+            f(val);
+        }*/
     }
 
 
@@ -1654,6 +1709,19 @@ namespace SUB
     {
         CMD::print(cmd, "sub");
 
+        /*auto f = get_sub_f(cmd.dst);
+        auto val = cmd.src;
+        if (val >= 0)
+        {
+            f(val);
+        }*/
+    }
+
+
+    static void im_r(CMD::Im2Reg const& cmd)
+    {
+        CMD::print(cmd, "sub");
+
         auto f = get_sub_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
@@ -1661,12 +1729,40 @@ namespace SUB
             f(val);
         }
     }
+
+
+    static void rm_r(DATA::InstrData const& in_data)
+    {
+        if (CMD::is_r_r(in_data))
+        {
+            auto cmd = CMD::get_r_r(in_data);
+            r_r(cmd);
+        }
+        else
+        {
+            printf("X rm_r");
+        }
+    }
+
+
+    static void im_rm(DATA::InstrData const& in_data)
+    {
+        if (CMD::is_im_r(in_data))
+        {
+            auto cmd = CMD::get_im_r(in_data);
+            im_r(cmd);
+        }
+        else
+        {
+            printf("X im_r");
+        }
+    }
 }
 
 
 namespace CMP
 {
-    using R = REG::Name;
+    using R = REG::Reg;
 
     typedef void (*func_t)(int);
 
@@ -1743,12 +1839,12 @@ namespace CMP
     {
         CMD::print(cmd, "cmp");
 
-        auto f = get_cmp_f(cmd.dst);
+        /*auto f = get_cmp_f(cmd.dst);
         auto val = REG::get_value(cmd.src);
         if (val >= 0)
         {
             f(val);
-        }
+        }*/
     }
 
 
@@ -1769,11 +1865,38 @@ namespace CMP
     {
         CMD::print(cmd, "cmp");
 
-        auto f = get_cmp_f(cmd.dst);
+        /*auto f = get_cmp_f(cmd.dst);
         auto val = cmd.src;
         if (val >= 0)
         {
             f(val);
+        }*/
+    }
+
+
+    static void r_r(CMD::Reg2Reg const& cmd)
+    {
+        CMD::print(cmd, "cmp");
+
+        auto f = get_cmp_f(cmd.dst);
+        auto val = REG::get_value(cmd.src);
+        if (val >= 0)
+        {
+            f(val);
+        }
+    }
+
+
+    static void rm_r(DATA::InstrData const& in_data)
+    {
+        if (CMD::is_r_r(in_data))
+        {
+            auto cmd = CMD::get_r_r(in_data);
+            r_r(cmd);
+        }
+        else
+        {
+            printf("X rm_r");
         }
     }
 }
@@ -1816,103 +1939,98 @@ static int decode_next(u8* data, int offset)
     else if (byte1_top7 == 0b0110'0011)
     {
         auto inst = DATA::get_im_rm(data, offset);
-        auto cmd = CMD::get_im_rm(inst);
+        //auto cmd = CMD::get_im_rm(inst);
         //MOV::im_rm(cmd);
         offset = REG::ip();
     }
     else if (byte1_top4 == 0b0000'1011)
     {
         auto inst = DATA::get_mov_im_r(data, offset);
-        auto cmd = CMD::get_im_r(inst);
-        MOV::im_r(cmd);
+        MOV::im_r(inst);
         offset = REG::ip();
     }
     else if (byte1_top7 == 0b0110'0011)
     {
         auto inst = DATA::get_mov_m_ac(data, offset);
-        auto cmd = CMD::get_m_ac(inst);
-        MOV::m_ac(cmd);
+        //auto cmd = CMD::get_m_ac(inst);
+        //MOV::m_ac(cmd);
         offset = REG::ip();
     }
     else if (byte1_top7 == 0b0101'0001)
     {
         auto inst = DATA::get_mov_m_ac(data, offset);
-        auto cmd = CMD::get_ac_m(inst);
-        MOV::ac_m(cmd);
+        //auto cmd = CMD::get_ac_m(inst);
+        //MOV::ac_m(cmd);
         offset = REG::ip();
     }
 
     else if (byte1_top6 == 0b0000'0000)
     {
         auto inst = DATA::get_rm_r(data, offset);
-        auto cmd = CMD::get_rm_r(inst);
-        ADD::rm_r(cmd);
+        //auto cmd = CMD::get_rm_r(inst);
+        //ADD::rm_r(cmd);
         offset = REG::ip();
     }
     else if (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0000)
     {
         auto inst = DATA::get_im_rm(data, offset);
-        auto cmd = CMD::get_im_rm(inst);
-        ADD::im_rm(cmd);
+        ADD::im_rm(inst);
         offset = REG::ip();
     }
     else if (byte1_top7 == 0b0001'0110)
     {
         auto inst = DATA::get_im_ac(data, offset);
-        auto cmd = CMD::get_im_ac(inst);
-        ADD::im_ac(cmd);
+        //auto cmd = CMD::get_im_ac(inst);
+        //ADD::im_ac(cmd);
         offset = REG::ip();
     }
 
     else if (byte1_top6 == 0b0000'1010)
     {
         auto inst = DATA::get_rm_r(data, offset);
-        auto cmd = CMD::get_rm_r(inst);
-        SUB::rm_r(cmd);
+        SUB::rm_r(inst);
         offset = REG::ip();
     }
     else if (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0101)
     {
         auto inst = DATA::get_im_rm(data, offset);
-        auto cmd = CMD::get_im_rm(inst);
-        SUB::im_rm(cmd);
+        SUB::im_rm(inst);
         offset = REG::ip();
     }
     else if (byte1_top7 == 0b0001'0110)
     {
         auto inst = DATA::get_im_ac(data, offset);
-        auto cmd = CMD::get_im_ac(inst);
-        SUB::im_ac(cmd);
+        //auto cmd = CMD::get_im_ac(inst);
+        //SUB::im_ac(cmd);
         offset = REG::ip();
     }
 
     else if (byte1_top6 == 0b0000'1110)
     {
         auto inst = DATA::get_rm_r(data, offset);
-        auto cmd = CMD::get_rm_r(inst);
-        CMP::rm_r(cmd);
+        CMP::rm_r(inst);
         offset = REG::ip();
     }
     else if (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0111)
     {
         auto inst = DATA::get_im_rm(data, offset);
-        auto cmd = CMD::get_im_rm(inst);
-        CMP::im_rm(cmd);
+        //auto cmd = CMD::get_im_rm(inst);
+        //CMP::im_rm(cmd);
         offset = REG::ip();
     }
     else if (byte1_top7 == 0b0001'1110)
     {
         auto inst = DATA::get_im_ac(data, offset);
-        auto cmd = CMD::get_im_ac(inst);
-        CMP::im_ac(cmd);
+        //auto cmd = CMD::get_im_ac(inst);
+        //CMP::im_ac(cmd);
         offset = REG::ip();
     }
 
     else if (byte1 == 0b0111'0101)
     {
         auto inst = DATA::get_jump(data, offset);
-        auto cmd = CMD::get_jump(inst);
-        JUMP::jnz(cmd);
+        //auto cmd = CMD::get_jump(inst);
+        //JUMP::jnz(cmd);
         offset = REG::ip();
     }
 
@@ -1945,7 +2063,9 @@ static void decode_bin_file(cstr bin_file)
 
 int main()
 {
-    constexpr auto file_old = "../06/listing_0044_register_movs";
+    //constexpr auto file_old = "../06/listing_0044_register_movs";
+    constexpr auto file_old = "../07/listing_0046_add_sub_cmp";
+
     constexpr auto file_051 = "listing_0051_memory_mov";
     constexpr auto file_052 = "listing_0052_memory_add_loop";
 
