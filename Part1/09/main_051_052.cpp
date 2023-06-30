@@ -182,8 +182,7 @@ namespace REG
         {
             FLAGS |= SF;
         }
-
-        memset(trace_flags, 0, sizeof(trace_flags));
+        
         snprintf(trace_flags, sizeof(trace_flags), "flags:%s->%s", old, get_flags_str());
     }
 
@@ -199,16 +198,29 @@ namespace REG
             FLAGS |= PF;
         }
 
-        memset(trace_flags, 0, sizeof(trace_flags));
         snprintf(trace_flags, sizeof(trace_flags), "flags:%s->%s", old, get_flags_str());
     }
 
 
     static void print_trace()
     {
-        printf(" ; %s", trace_reg);
-        printf(" %s", trace_ip);
-        printf(" %s", trace_flags);
+        if (strlen(trace_reg))
+        {
+            printf(" ; %s", trace_reg);
+            memset(trace_reg, 0, sizeof(trace_reg));
+        }
+
+        if (strlen(trace_ip))
+        {
+            printf(" %s", trace_ip);
+            memset(trace_ip, 0, sizeof(trace_ip));
+        }
+
+        if (strlen(trace_flags))
+        {
+            printf(" %s", trace_flags);
+            memset(trace_flags, 0, sizeof(trace_flags));
+        }
     }
 
 
@@ -344,8 +356,7 @@ namespace REG
     static void mov_reg_value(u16& reg, Reg name, int v)
     {
         auto old = reg;
-        reg = (u16)v;
-        memset(trace_reg, 0, sizeof(trace_reg));
+        reg = (u16)v;        
         snprintf(trace_reg, sizeof(trace_reg), "%s:0x%x->0x%x", reg_str(name), old, reg);
     }
 
@@ -379,7 +390,7 @@ namespace REG
     {
         int old = IP;
         IP = (u16)v;
-        memset(trace_ip, 0, sizeof(trace_ip));
+        
         snprintf(trace_ip, sizeof(trace_ip), "ip:0x%x->0x%x", old, v);
     }
 
@@ -1552,8 +1563,8 @@ static int decode_next(u8* data, int offset)
     else if (byte1 == 0b0111'0101)
     {
         auto inst = DATA::get_jump(data, offset);
-        //auto cmd = CMD::get_jump(inst);
-        //JUMP::jnz(cmd);
+        auto cmd = CMD::get_jump(inst);
+        JUMP::jnz(cmd);
         offset = REG::ip();
     }
 
@@ -1587,7 +1598,9 @@ static void decode_bin_file(cstr bin_file)
 int main()
 {
     //constexpr auto file_old = "../06/listing_0044_register_movs";
-    constexpr auto file_old = "../07/listing_0046_add_sub_cmp";
+    //constexpr auto file_old = "../07/listing_0046_add_sub_cmp";
+    //constexpr auto file_old = "../08/listing_0048_ip_register";
+    constexpr auto file_old = "../08/listing_0049_conditional_jumps";
 
     constexpr auto file_051 = "listing_0051_memory_mov";
     constexpr auto file_052 = "listing_0052_memory_add_loop";
