@@ -118,7 +118,7 @@ namespace REG
 
     static u16 FLAGS = 0;
 
-    static u8 MEM[1024 * 1024] = { 0 };
+    static u8 MEM[100000] = { 0 };
 
     static char trace_reg[20] = { 0 };
     static char trace_ip[20] = { 0 };
@@ -612,6 +612,38 @@ namespace DATA
     }
 
 
+    static InstrData get_mov_im_rm(u8* data, int offset)
+    {
+        InstrData in{};   
+
+        auto byte1 = data[offset];
+        auto byte2 = data[offset + 1];
+
+        in.opcode = byte1 >> 1;
+        in.w_b1 = byte1 & 0b0000'0001;
+        in.mod_b2 = byte2 >> 6;
+        in.rm_b3 = byte2 & 0b00'000'111;
+
+        auto disp_sz = get_disp_sz(in.mod_b2, in.rm_b3);
+        if (disp_sz)
+        {
+            set_disp(in, data + offset + 2, disp_sz);
+        }
+
+        auto im_sz = get_w_sz(in.w_b1);
+        set_im_data(in, data + offset + 2 + disp_sz, im_sz);
+
+        in.offset_begin = offset;
+        in.offset_end = offset + 2 + disp_sz + im_sz;
+
+        REG::set_ip(in.offset_end);
+
+        //print_binary(data, in);
+
+        return in;
+    }
+
+
     static InstrData get_mov_im_r(u8* data, int offset)
     {
         InstrData in{};   
@@ -721,6 +753,16 @@ namespace CMD
     };
 
 
+    class Im2Mem
+    {
+    public:
+        int src = -1;
+        int dst = -1;
+
+        int size = -1;
+    };
+
+
     class Jump
     {
     public:
@@ -730,8 +772,7 @@ namespace CMD
 
     static void print(Im2Reg const& cmd, cstr op)
     {
-        auto src = cmd.src;
-        printf("%s %s, %d", op, REG::reg_str(cmd.dst), src);
+        printf("%s %s, %d", op, REG::reg_str(cmd.dst), cmd.src);
     }
 
 
@@ -739,8 +780,24 @@ namespace CMD
     {
         printf("%s %s, %s", op, REG::reg_str(cmd.dst), REG::reg_str(cmd.src));
     }
-   
 
+
+    static void print(Im2Mem const& cmd, cstr op)
+    {
+        if (cmd.size == 1)
+        {
+            printf("%s byte [%d], %d", op, cmd.dst, cmd.src);
+        }
+        else if (cmd.size == 2)
+        {
+            printf("%s word [%d], %d", op, cmd.dst, cmd.src);
+        }
+        else
+        {
+            printf("%s err [%d], %d", op, cmd.dst, cmd.src);
+        }        
+    }
+   
 
     static void print(Jump const& j, cstr op)
     {
@@ -804,6 +861,14 @@ namespace CMD
             in_data.opcode == 0b100000 &&
             in_data.mod_b2 == 0b11 &&
             (in_data.im_sz == 1 || in_data.im_sz == 2);
+    }
+
+
+    static bool is_im_m(DATA::InstrData const& in_data)
+    {
+        return
+            in_data.mod_b2 == 0b00 &&
+            in_data.rm_b3 == 0b110;
     }
 
 
@@ -894,6 +959,27 @@ namespace CMD
         return res;
     }
 
+
+    static Im2Mem get_im_m(DATA::InstrData const& in_data)
+    {
+        Im2Mem res{};
+
+        assert(in_data.disp_sz == 2);
+
+        res.size = 2;
+        res.dst = in_data.displo_b8 + (in_data.disphi_b8 << 8);
+
+        if (in_data.im_sz == 1 || in_data.s_b1 == 1)
+        {
+            res.src = in_data.imlo_b8;
+        }
+        else if (in_data.im_sz == 2)
+        {
+            res.src = in_data.imlo_b8 + (in_data.imhi_b8 << 8);
+        }
+
+        return res;
+    }
 
     /*static MemAcc get_m_ac(DATA::InstrData const& in_data)
     {
@@ -1043,6 +1129,14 @@ namespace MOV
     }
 
 
+    static void im_m(CMD::Im2Mem const& cmd)
+    {
+        CMD::print(cmd, "mov");
+
+        
+    }
+
+
     static void rm_r(DATA::InstrData const& in_data)
     {
         if (CMD::is_r_r(in_data))
@@ -1061,6 +1155,20 @@ namespace MOV
         else
         {
             printf("X rm_r");
+        }
+    }
+
+
+    static void im_rm(DATA::InstrData const& in_data)
+    {
+        if (CMD::is_im_m(in_data))
+        {
+            auto cmd = CMD::get_im_m(in_data);
+            im_m(cmd);
+        }
+        else
+        {
+            printf("X im_rm");
         }
     }
 
@@ -1472,9 +1580,8 @@ static int decode_next(u8* data, int offset)
     }
     else if (byte1_top7 == 0b0110'0011)
     {
-        auto inst = DATA::get_im_rm(data, offset);
-        //auto cmd = CMD::get_im_rm(inst);
-        //MOV::im_rm(cmd);
+        auto inst = DATA::get_mov_im_rm(data, offset);
+        MOV::im_rm(inst);
         offset = REG::ip();
     }
     else if (byte1_top4 == 0b0000'1011)
@@ -1600,12 +1707,12 @@ int main()
     //constexpr auto file_old = "../06/listing_0044_register_movs";
     //constexpr auto file_old = "../07/listing_0046_add_sub_cmp";
     //constexpr auto file_old = "../08/listing_0048_ip_register";
-    constexpr auto file_old = "../08/listing_0049_conditional_jumps";
+    //constexpr auto file_old = "../08/listing_0049_conditional_jumps";
 
     constexpr auto file_051 = "listing_0051_memory_mov";
     constexpr auto file_052 = "listing_0052_memory_add_loop";
 
-    decode_bin_file(file_old);
+    decode_bin_file(file_051);
 
     printf("\nFinal registers:\n");
     REG::print_all();
