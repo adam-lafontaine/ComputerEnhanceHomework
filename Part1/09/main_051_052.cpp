@@ -181,15 +181,13 @@ namespace REG
     }
 
 
-    static void set_p_flag(u16 diff) 
+    static void set_z_flag(u16 diff) 
     {
         auto old = get_flags_str();
 
-        FLAGS = 0;
-
         if (!diff)
         {
-            FLAGS |= PF;
+            FLAGS |= ZF;
         }
 
         snprintf(trace_flags, sizeof(trace_flags), "flags:%s->%s", old, get_flags_str());
@@ -850,190 +848,9 @@ namespace CMD
     };
 
 
-    class Reg2Reg
-    {
-    public:
-        Reg src = Reg::none;
-        Reg dst = Reg::none;
-    };
-
-
-    class Mem2Reg
-    {
-    public:
-        int src = -1;
-        Reg dst = Reg::none;
-    };
-
-
-    class Im2Mem
-    {
-    public:
-        int src = -1;
-        int dst = -1;
-
-        int im_size = -1;
-    };
-
-
-    class Im2MemRegDisp
-    {
-    public:
-        int src = -1;
-        MR dst = MR::none;
-
-        int im_size = -1;
-        int disp = -1;
-    };
-
-
-
-
-
-    class Jump
-    {
-    public:
-        int j_offset = 0;
-    };
-
-
     static void print(Im2Reg const& cmd, cstr op)
     {
         printf("%s %s, %d", op, REG::get_str(cmd.dst), cmd.src);
-    }
-
-
-    static void print(Reg2Reg const& cmd, cstr op)
-    {
-        printf("%s %s, %s", op, REG::get_str(cmd.dst), REG::get_str(cmd.src));
-    }
-
-
-    static void print(Mem2Reg const& cmd, cstr op)
-    {
-        printf("%s word %s, [%d]", op, REG::get_str(cmd.dst), cmd.src);
-    }
-
-
-    static void print(Im2Mem const& cmd, cstr op)
-    {
-        auto sz = "err";
-        if (cmd.im_size == 1)
-        {
-            sz = "byte";
-        }
-        else if (cmd.im_size == 2)
-        {
-            sz = "word";
-        }
-
-        printf("%s %s [%d], %d", op, sz, cmd.dst, cmd.src);     
-    }
-
-
-    static void print(Im2MemRegDisp const& cmd, cstr op)
-    {
-        auto sz = "err";
-        if (cmd.im_size == 1)
-        {
-            sz = "byte";
-        }
-        else if (cmd.im_size == 2)
-        {
-            sz = "word";
-        }
-
-        printf("%s %s [%s + %d], %d", op, sz, REG::get_str(cmd.dst), cmd.disp, cmd.src);
-    }
-   
-
-    static void print(Jump const& j, cstr op)
-    {
-        printf("%s $%d", op, j.j_offset);
-    }
-
-
-    /*static RegMemReg get_rm_r(DATA::InstrData const& in_data)
-    {
-        RegMemReg res{};
-
-        auto r = REG::get_reg(in_data.reg_b3, in_data.w_b1);
-        auto rm = REG::get_reg_mem(in_data.mod_b2, in_data.rm_b3, in_data.w_b1);
-
-        if (in_data.d_b1)
-        {
-            res.dst = r;
-            res.src = rm;
-        }
-        else
-        {
-            res.dst = rm;
-            res.src = r;
-        }
-
-        if (in_data.disp_sz == 1)
-        {
-            res.disp = in_data.displo_b8;
-        }
-        else if (in_data.disp_sz == 2)
-        {
-            res.disp = in_data.displo_b8 + (in_data.disphi_b8 << 8);
-        }
-
-        return res;
-    }*/
-
-
-    static bool is_r_r(DATA::InstrData const& in_data)
-    {
-        return 
-            in_data.mod_b2 == 0b11;
-    }
-
-
-    static bool is_m_r(DATA::InstrData const& in_data)
-    {
-        return
-            in_data.d_b1 == 1 &&
-            in_data.mod_b2 == 0b00 &&
-            in_data.rm_b3 == 0b110;
-    }
-
-
-    static bool is_rm_r(DATA::InstrData const& in_data)
-    {
-        return 
-            false;
-    }
-
-
-    static bool is_r_rm(DATA::InstrData const& in_data)
-    {
-        return false;
-    }
-
-
-    static bool is_im_r(DATA::InstrData const& in_data)
-    {
-        return
-            in_data.opcode == 0b100000 &&
-            in_data.mod_b2 == 0b11 &&
-            (in_data.im_sz == 1 || in_data.im_sz == 2);
-    }
-
-
-    static bool is_m(DATA::InstrData const& in_data)
-    {
-        return
-            in_data.mod_b2 == 0b00 &&
-            in_data.rm_b3 == 0b110;
-    }
-
-
-    static bool is_rmd(DATA::InstrData const& in_data)
-    {
-        return
-            (in_data.mod_b2 == 0b01 || in_data.mod_b2 == 0b10);
     }
 
 
@@ -1075,6 +892,20 @@ namespace CMD
     }
 
 
+    class Reg2Reg
+    {
+    public:
+        Reg src = Reg::none;
+        Reg dst = Reg::none;
+    };
+
+
+    static void print(Reg2Reg const& cmd, cstr op)
+    {
+        printf("%s %s, %s", op, REG::get_str(cmd.dst), REG::get_str(cmd.src));
+    }
+
+
     static Reg2Reg get_r_r(DATA::InstrData const& in_data)
     {
         Reg2Reg res{};
@@ -1097,6 +928,20 @@ namespace CMD
     }
 
 
+    class Mem2Reg
+    {
+    public:
+        int src = -1;
+        Reg dst = Reg::none;
+    };
+
+
+    static void print(Mem2Reg const& cmd, cstr op)
+    {
+        printf("%s word %s, [%d]", op, REG::get_str(cmd.dst), cmd.src);
+    }
+
+
     static Mem2Reg get_m_r(DATA::InstrData const& in_data)
     {
         Mem2Reg res{};
@@ -1108,6 +953,82 @@ namespace CMD
         res.src = in_data.displo_b8 + (in_data.disphi_b8 << 8);
 
         return res;
+    }
+
+
+    class Reg2MemReg
+    {
+    public:
+        Reg src = Reg::none;
+        MR dst = MR::none;
+    };
+
+
+    static void print(Reg2MemReg const& cmd, cstr op)
+    {
+        printf("%s word [%s], %s", op, REG::get_str(cmd.dst), REG::get_str(cmd.src));
+    }
+
+
+    static Reg2MemReg get_r_mr(DATA::InstrData const& in_data)
+    {
+        Reg2MemReg res{};
+
+        res.src = REG::get_reg(in_data.reg_b3, in_data.w_b1);
+        res.dst = REG::get_mem_reg(in_data.rm_b3, in_data.mod_b2);
+
+        return res;
+    }
+
+
+    class RegMem2Reg
+    {
+    public:
+        MR src = MR::none;
+        Reg dst = Reg::none;
+    };
+
+
+    static void print(RegMem2Reg const& cmd, cstr op)
+    {
+        printf("%s %s, [%s]", op, REG::get_str(cmd.dst), REG::get_str(cmd.src));
+    }
+
+
+    static RegMem2Reg get_rm_r(DATA::InstrData const& in_data)
+    {
+        RegMem2Reg res{};
+
+        res.src = REG::get_mem_reg(in_data.rm_b3, in_data.mod_b2);
+        res.dst = REG::get_reg(in_data.reg_b3, in_data.w_b1);
+
+        return res;
+    }
+
+
+    class Im2Mem
+    {
+    public:
+        int src = -1;
+        int dst = -1;
+
+        int im_size = -1;
+    };
+
+
+    static void print(Im2Mem const& cmd, cstr op)
+    {
+        auto sz = "err";
+        if (cmd.im_size == 1)
+        {
+            sz = "byte";
+        }
+        else if (cmd.im_size == 2)
+        {
+            sz = "word";
+        }
+
+        printf("%s %s [%d], %d", op, sz, cmd.dst, cmd.src);     
     }
 
 
@@ -1130,6 +1051,33 @@ namespace CMD
         }
 
         return res;
+    }
+
+
+    class Im2MemRegDisp
+    {
+    public:
+        int src = -1;
+        MR dst = MR::none;
+
+        int im_size = -1;
+        int disp = -1;
+    };
+
+
+    static void print(Im2MemRegDisp const& cmd, cstr op)
+    {
+        auto sz = "err";
+        if (cmd.im_size == 1)
+        {
+            sz = "byte";
+        }
+        else if (cmd.im_size == 2)
+        {
+            sz = "word";
+        }
+
+        printf("%s %s [%s + %d], %d", op, sz, REG::get_str(cmd.dst), cmd.disp, cmd.src);
     }
 
 
@@ -1165,55 +1113,74 @@ namespace CMD
     }
 
 
-    /*static MemAcc get_m_ac(DATA::InstrData const& in_data)
+    class Jump
     {
-        MemAcc res{};
+    public:
+        int j_offset = 0;
+    };
+   
 
-        if (in_data.addr_sz == 1)
-        {
-            res.src = in_data.addrlo_b8;
-        }
-        else if (in_data.addr_sz == 2)
-        {
-            res.src = in_data.addrlo_b8 + (in_data.addrhi_b8 << 8);
-        }
-
-        return res;
+    static void print(Jump const& j, cstr op)
+    {
+        printf("%s $%d", op, j.j_offset);
     }
 
 
-    static AccMem get_ac_m(DATA::InstrData const& in_data)
+    static bool is_r_r(DATA::InstrData const& in_data)
     {
-        AccMem res{};
-
-        if (in_data.addr_sz == 1)
-        {
-            res.dst = in_data.addrlo_b8;
-        }
-        else if (in_data.addr_sz == 2)
-        {
-            res.dst = in_data.addrlo_b8 + (in_data.addrhi_b8 << 8);
-        }
-
-        return res;
+        return 
+            in_data.mod_b2 == 0b11;
     }
 
 
-    static ImAcc get_im_ac(DATA::InstrData const& in_data)
+    static bool is_m_r(DATA::InstrData const& in_data)
     {
-        ImAcc res{};
+        return
+            in_data.d_b1 == 1 &&
+            in_data.mod_b2 == 0b00 &&
+            in_data.rm_b3 == 0b110;
+    }
 
-        if (in_data.im_sz == 1)
-        {
-            res.src = in_data.imlo_b8;
-        }
-        else if (in_data.im_sz == 2)
-        {
-            res.src = in_data.imlo_b8 + (in_data.imhi_b8 << 8);
-        }
 
-        return res;
-    }*/
+    static bool is_rm_r(DATA::InstrData const& in_data)
+    {
+        return 
+            in_data.d_b1 == 1 &&
+            in_data.mod_b2 != 0b11;
+    }
+
+
+    static bool is_r_rm(DATA::InstrData const& in_data)
+    {
+        return 
+            in_data.d_b1 == 0 &&
+            in_data.mod_b2 != 0b11;
+
+    }
+
+
+    static bool is_im_r(DATA::InstrData const& in_data)
+    {
+        return
+            in_data.opcode == 0b100000 &&
+            in_data.mod_b2 == 0b11 &&
+            (in_data.im_sz == 1 || in_data.im_sz == 2);
+    }
+
+
+    static bool is_m(DATA::InstrData const& in_data)
+    {
+        return
+            in_data.mod_b2 == 0b00 &&
+            in_data.rm_b3 == 0b110;
+    }
+
+
+    static bool is_rmd(DATA::InstrData const& in_data)
+    {
+        return
+            (in_data.mod_b2 == 0b01 || in_data.mod_b2 == 0b10);
+    }
 
 
     static Jump get_jump(DATA::InstrData const& in_data)
@@ -1300,7 +1267,7 @@ namespace MOV
     }
 
 
-    static void r_r(CMD::Reg2Reg const& cmd)
+    static void mov_r_r(CMD::Reg2Reg const& cmd)
     {
         CMD::print(cmd, "mov");
 
@@ -1313,7 +1280,34 @@ namespace MOV
     }
 
 
-    static void im_m(CMD::Im2Mem const& cmd)
+    static void mov_m_r(CMD::Mem2Reg const& cmd)
+    {
+        print(cmd, "mov");
+
+        auto p16 = (u16*)(REG::MEM + cmd.src);
+        REG::set_reg_value(cmd.dst, *p16);
+    }
+
+
+    static void mov_r_rm(CMD::Reg2MemReg const& cmd)
+    {
+        print(cmd, "mov");
+
+        auto p16 = (u16*)(REG::MEM + REG::get_value(cmd.dst));
+        *p16 = REG::get_value(cmd.src);
+    }
+
+
+    static void mov_rm_r(CMD::RegMem2Reg const& cmd)
+    {
+        print(cmd, "mov");
+
+        auto p16 = (u16*)(REG::MEM + REG::get_value(cmd.src));
+        REG::set_reg_value(cmd.dst, *p16);
+    }
+
+
+    static void mov_im_m(CMD::Im2Mem const& cmd)
     {
         CMD::print(cmd, "mov");
 
@@ -1331,7 +1325,7 @@ namespace MOV
     }
 
 
-    static void im_rmd(CMD::Im2MemRegDisp const& cmd)
+    static void mov_im_rmd(CMD::Im2MemRegDisp const& cmd)
     {
         CMD::print(cmd, "mov");
 
@@ -1349,35 +1343,27 @@ namespace MOV
     }
 
 
-    static void m_r(CMD::Mem2Reg const& cmd)
-    {
-        print(cmd, "mov");
-
-        auto p16 = (u16*)(REG::MEM + cmd.src);
-        REG::set_reg_value(cmd.dst, *p16);
-    }
-
-
     static void rm_r(DATA::InstrData const& in_data)
     {
         if (CMD::is_r_r(in_data))
         {
             auto cmd = CMD::get_r_r(in_data);
-            r_r(cmd);
+            mov_r_r(cmd);
         }
         else if (CMD::is_m_r(in_data))
-        {
-            //DATA::print(in_data.bytes);
+        {            
             auto cmd = CMD::get_m_r(in_data);
-            m_r(cmd);
+            mov_m_r(cmd);
         }
         else if (CMD::is_r_rm(in_data))
         {
-
+            auto cmd = CMD::get_r_mr(in_data);
+            mov_r_rm(cmd);
         }
         else if (CMD::is_rm_r(in_data))
         {
-
+            auto cmd = CMD::get_rm_r(in_data);
+            mov_rm_r(cmd);
         }
         else
         {
@@ -1392,12 +1378,12 @@ namespace MOV
         if (CMD::is_m(in_data))
         {
             auto cmd = CMD::get_im_m(in_data);
-            im_m(cmd);
+            mov_im_m(cmd);
         }
         else if (CMD::is_rmd(in_data))
         {
             auto cmd = CMD::get_im_rmd(in_data);
-            im_rmd(cmd);
+            mov_im_rmd(cmd);
         }
         else
         {
@@ -1506,7 +1492,7 @@ namespace ADD
     }
 
 
-    static void im_r(CMD::Im2Reg const& cmd)
+    static void add_im_r(CMD::Im2Reg const& cmd)
     {
         CMD::print(cmd, "add");
 
@@ -1519,16 +1505,43 @@ namespace ADD
     }
 
 
+    static void add_r_r(CMD::Reg2Reg const& cmd)
+    {
+        CMD::print(cmd, "add");
+
+        auto f = get_add_f(cmd.dst);
+        auto val = REG::get_value(cmd.src);
+        if (val >= 0)
+        {
+            f(val);
+        }
+    }
+
+
     static void im_rm(DATA::InstrData const& in_data)
     {
         if (CMD::is_im_r(in_data))
         {
             auto cmd = CMD::get_im_r(in_data);
-            im_r(cmd);
+            add_im_r(cmd);
         }
         else
         {
-            printf("X im_r");
+            DATA::print(in_data.bytes);
+        }
+    }
+
+
+    static void rm_r(DATA::InstrData const& in_data)
+    {
+        if (CMD::is_r_r(in_data))
+        {
+            auto cmd = CMD::get_r_r(in_data);
+            add_r_r(cmd);
+        }
+        else
+        {
+            DATA::print(in_data.bytes);
         }
     }
 }
@@ -1697,25 +1710,25 @@ namespace CMP
     }
 
 
-    static void ax(int v) { REG::set_p_flag(REG::AX - (u16)v); }
-    static void bx(int v) { REG::set_p_flag(REG::BX - (u16)v); }
-    static void cx(int v) { REG::set_p_flag(REG::CX - (u16)v); }
-    static void dx(int v) { REG::set_p_flag(REG::DX - (u16)v); }
+    static void ax(int v) { REG::set_z_flag(REG::AX - (u16)v); }
+    static void bx(int v) { REG::set_z_flag(REG::BX - (u16)v); }
+    static void cx(int v) { REG::set_z_flag(REG::CX - (u16)v); }
+    static void dx(int v) { REG::set_z_flag(REG::DX - (u16)v); }
 
-    static void ah(int v) { REG::set_p_flag(cmp_high(REG::AX, v)); }
-    static void bh(int v) { REG::set_p_flag(cmp_high(REG::BX, v)); }
-    static void ch(int v) { REG::set_p_flag(cmp_high(REG::CX, v)); }
-    static void dh(int v) { REG::set_p_flag(cmp_high(REG::DX, v)); }
+    static void ah(int v) { REG::set_z_flag(cmp_high(REG::AX, v)); }
+    static void bh(int v) { REG::set_z_flag(cmp_high(REG::BX, v)); }
+    static void ch(int v) { REG::set_z_flag(cmp_high(REG::CX, v)); }
+    static void dh(int v) { REG::set_z_flag(cmp_high(REG::DX, v)); }
 
-    static void al(int v) { REG::set_p_flag(cmp_low(REG::AX, v)); }
-    static void bl(int v) { REG::set_p_flag(cmp_low(REG::BX, v)); }
-    static void cl(int v) { REG::set_p_flag(cmp_low(REG::CX, v)); }
-    static void dl(int v) { REG::set_p_flag(cmp_low(REG::DX, v)); }
+    static void al(int v) { REG::set_z_flag(cmp_low(REG::AX, v)); }
+    static void bl(int v) { REG::set_z_flag(cmp_low(REG::BX, v)); }
+    static void cl(int v) { REG::set_z_flag(cmp_low(REG::CX, v)); }
+    static void dl(int v) { REG::set_z_flag(cmp_low(REG::DX, v)); }
 
-    static void sp(int v) { REG::set_p_flag(REG::SP - (u16)v); }
-    static void bp(int v) { REG::set_p_flag(REG::BP - (u16)v); }
-    static void si(int v) { REG::set_p_flag(REG::SI - (u16)v); }
-    static void di(int v) { REG::set_p_flag(REG::DI - (u16)v); }
+    static void sp(int v) { REG::set_z_flag(REG::SP - (u16)v); }
+    static void bp(int v) { REG::set_z_flag(REG::BP - (u16)v); }
+    static void si(int v) { REG::set_z_flag(REG::SI - (u16)v); }
+    static void di(int v) { REG::set_z_flag(REG::DI - (u16)v); }
 
     static void no_op(int) {}
 
@@ -1841,8 +1854,7 @@ static int decode_next(u8* data, int offset)
     else if (byte1_top6 == 0b0000'0000)
     {
         auto inst = DATA::get_rm_r(data, offset);
-        //auto cmd = CMD::get_rm_r(inst);
-        //ADD::rm_r(cmd);
+        ADD::rm_r(inst);
         offset = REG::ip();
     }
     else if (byte1_top6 == 0b0010'0000 && byte2_345 == 0b0000'0000)
@@ -1945,7 +1957,7 @@ int main()
     constexpr auto file_051 = "listing_0051_memory_mov";
     constexpr auto file_052 = "listing_0052_memory_add_loop";
 
-    decode_bin_file(file_051);
+    decode_bin_file(file_052);
 
     printf("\nFinal registers:\n");
     REG::print_all();
