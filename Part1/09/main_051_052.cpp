@@ -108,6 +108,8 @@ namespace REG
     static u16 DI = 0;
     static u16 IP = 0;
 
+    static u16 ERR = 0;
+
     static u16 FLAGS = 0;
 
     static u8 MEM[100000] = { 0 };
@@ -388,6 +390,27 @@ namespace REG
     }
 
 
+    static u16& get_ref(Reg r)
+    {
+        using R = REG::Reg;
+
+        switch (r)
+        {
+        case R::ax: return AX;
+        case R::bx: return BX;
+        case R::cx: return CX;
+        case R::dx: return DX;
+
+        case R::sp: return SP;
+        case R::bp: return BP;
+        case R::si: return SI;
+        case R::di: return DI;
+        }
+
+        return ERR;
+    }
+
+
     static void mov_reg_value(u16& reg, Reg name, int v)
     {
         auto old = reg;
@@ -400,6 +423,12 @@ namespace REG
     {
         mov_reg_value(reg, name, v);
         set_flags(reg);
+    }
+
+
+    static void set_reg_value(Reg name, int v)
+    {
+        set_reg_value(get_ref(name), name, v);
     }
     
 
@@ -829,13 +858,21 @@ namespace CMD
     };
 
 
+    class Mem2Reg
+    {
+    public:
+        int src = -1;
+        Reg dst = Reg::none;
+    };
+
+
     class Im2Mem
     {
     public:
         int src = -1;
         int dst = -1;
 
-        int size = -1; // needed?
+        int im_size = -1;
     };
 
 
@@ -845,7 +882,7 @@ namespace CMD
         int src = -1;
         MR dst = MR::none;
 
-        int size = -1;
+        int im_size = -1;
         int disp = -1;
     };
 
@@ -872,14 +909,20 @@ namespace CMD
     }
 
 
+    static void print(Mem2Reg const& cmd, cstr op)
+    {
+        printf("%s word %s, [%d]", op, REG::get_str(cmd.dst), cmd.src);
+    }
+
+
     static void print(Im2Mem const& cmd, cstr op)
     {
         auto sz = "err";
-        if (cmd.size == 1)
+        if (cmd.im_size == 1)
         {
             sz = "byte";
         }
-        else if (cmd.size == 2)
+        else if (cmd.im_size == 2)
         {
             sz = "word";
         }
@@ -891,11 +934,11 @@ namespace CMD
     static void print(Im2MemRegDisp const& cmd, cstr op)
     {
         auto sz = "err";
-        if (cmd.size == 1)
+        if (cmd.im_size == 1)
         {
             sz = "byte";
         }
-        else if (cmd.size == 2)
+        else if (cmd.im_size == 2)
         {
             sz = "word";
         }
@@ -948,9 +991,19 @@ namespace CMD
     }
 
 
+    static bool is_m_r(DATA::InstrData const& in_data)
+    {
+        return
+            in_data.d_b1 == 1 &&
+            in_data.mod_b2 == 0b00 &&
+            in_data.rm_b3 == 0b110;
+    }
+
+
     static bool is_rm_r(DATA::InstrData const& in_data)
     {
-        return false;
+        return 
+            false;
     }
 
 
@@ -969,7 +1022,7 @@ namespace CMD
     }
 
 
-    static bool is_im_m(DATA::InstrData const& in_data)
+    static bool is_m(DATA::InstrData const& in_data)
     {
         return
             in_data.mod_b2 == 0b00 &&
@@ -977,7 +1030,7 @@ namespace CMD
     }
 
 
-    static bool is_im_rmd(DATA::InstrData const& in_data)
+    static bool is_rmd(DATA::InstrData const& in_data)
     {
         return
             (in_data.mod_b2 == 0b01 || in_data.mod_b2 == 0b10);
@@ -1044,13 +1097,27 @@ namespace CMD
     }
 
 
+    static Mem2Reg get_m_r(DATA::InstrData const& in_data)
+    {
+        Mem2Reg res{};
+
+        res.dst = REG::get_reg(in_data.reg_b3, in_data.w_b1);
+
+        assert(in_data.disp_sz == 2);
+        
+        res.src = in_data.displo_b8 + (in_data.disphi_b8 << 8);
+
+        return res;
+    }
+
+
     static Im2Mem get_im_m(DATA::InstrData const& in_data)
     {
         Im2Mem res{};
 
         assert(in_data.disp_sz == 2);
 
-        res.size = 2;
+        res.im_size = in_data.im_sz;
         res.dst = in_data.displo_b8 + (in_data.disphi_b8 << 8);
 
         if (in_data.im_sz == 1 || in_data.s_b1 == 1)
@@ -1072,7 +1139,7 @@ namespace CMD
 
         res.dst = REG::get_mem_reg(in_data.rm_b3, in_data.mod_b2);
 
-        res.size = in_data.im_sz;
+        res.im_size = in_data.im_sz;
         
         if (in_data.disp_sz == 1)
         {
@@ -1252,11 +1319,11 @@ namespace MOV
 
         auto p8 = REG::MEM + cmd.dst;
 
-        if (cmd.size == 1)
+        if (cmd.im_size == 1)
         {
             *p8 = (u8)cmd.src;
         }
-        else if (cmd.size == 2)
+        else if (cmd.im_size == 2)
         {
             auto p16 = (u16*)p8;
             *p16 = (u16)cmd.src;
@@ -1270,15 +1337,24 @@ namespace MOV
 
         auto p8 = REG::MEM + REG::get_value(cmd.dst) + cmd.disp;
 
-        if (cmd.size == 1)
+        if (cmd.im_size == 1)
         {
             *p8 = (u8)cmd.src;
         }
-        else if (cmd.size == 2)
+        else if (cmd.im_size == 2)
         {
             auto p16 = (u16*)p8;
             *p16 = (u16)cmd.src;
         }
+    }
+
+
+    static void m_r(CMD::Mem2Reg const& cmd)
+    {
+        print(cmd, "mov");
+
+        auto p16 = (u16*)(REG::MEM + cmd.src);
+        REG::set_reg_value(cmd.dst, *p16);
     }
 
 
@@ -1288,6 +1364,12 @@ namespace MOV
         {
             auto cmd = CMD::get_r_r(in_data);
             r_r(cmd);
+        }
+        else if (CMD::is_m_r(in_data))
+        {
+            //DATA::print(in_data.bytes);
+            auto cmd = CMD::get_m_r(in_data);
+            m_r(cmd);
         }
         else if (CMD::is_r_rm(in_data))
         {
@@ -1299,6 +1381,7 @@ namespace MOV
         }
         else
         {
+            
             printf("X rm_r");
         }
     }
@@ -1306,12 +1389,12 @@ namespace MOV
 
     static void im_rm(DATA::InstrData const& in_data)
     {
-        if (CMD::is_im_m(in_data))
+        if (CMD::is_m(in_data))
         {
             auto cmd = CMD::get_im_m(in_data);
             im_m(cmd);
         }
-        else if (CMD::is_im_rmd(in_data))
+        else if (CMD::is_rmd(in_data))
         {
             auto cmd = CMD::get_im_rmd(in_data);
             im_rmd(cmd);
