@@ -12,5 +12,5 @@ int main()
     }
     
 
-    haversine_json("out/pairs.json", 10);
+    haversine_json("out/pairs.json", 1000);
 }
