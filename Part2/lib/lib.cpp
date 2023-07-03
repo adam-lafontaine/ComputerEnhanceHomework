@@ -6,7 +6,8 @@
 #include "lib.hpp"
 #include "listing_0065_haversine_formula.cpp"
 
-
+using RD = std::random_device;
+using Gen = std::mt19937;
 using Dist = std::normal_distribution<f64>;
 
 
@@ -22,22 +23,39 @@ f64 haversine_earth(f64 X0, f64 Y0, f64 X1, f64 Y1)
 }
 
 
-static void write_pair(std::ofstream& out, f64 val)
+static f64 scale_x(f64 val)
 {
-    f64 x0 = val;
-    f64 y0 = val;
-    f64 x1 = val;
-    f64 x2 = val;
+    return X_MIN + val * (X_MAX - X_MIN);
+}
+
+
+static f64 scale_y(f64 val)
+{
+    return Y_MIN + val * (Y_MAX - Y_MIN);
+}
+
+
+static void write_pair(std::ofstream& out, Dist& dist, Gen& gen)
+{
+    f64 x0 = scale_x(dist(gen));
+    f64 y0 = scale_y(dist(gen));
+    f64 x1 = scale_x(dist(gen));
+    f64 y1 = scale_y(dist(gen));
 
     out << "{\"X0\":" << x0 << ",\"Y0\":" << y0;
-    out << ",\"X1\":" << x1 << ",\"Y1\":" << y0 << "}";
+    out << ",\"X1\":" << x1 << ",\"Y1\":" << y1 << "}";
 }
 
 
 void haversine_json(fs::path const& json_path, u32 n_pairs)
 {
-    //std::random_device rd {};
-    //std::mt19937 gen {rd()};
+    RD rd {};
+    Gen gen {rd()};
+
+    f64 mean = 0.5;
+    f64 sd = 0.2;
+
+    Dist dist { mean, sd };
 
     std::ofstream out(json_path, std::ios::out);
 
@@ -50,11 +68,11 @@ void haversine_json(fs::path const& json_path, u32 n_pairs)
 
     for (u32 i = 0; i < n_pairs - 1; ++i)
     {
-        write_pair(out, i);
+        write_pair(out, dist, gen);
         out << ",";
     }
 
-    write_pair(out, 99);
+    write_pair(out, dist, gen);
 
     out << "]}";
     out.close();
