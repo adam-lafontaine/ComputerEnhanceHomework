@@ -5,8 +5,12 @@
 
 int main()
 {
-    auto res = fs::create_directories("out");
-    assert(res);
+    if(!fs::exists("out"))
+    {
+        auto res = fs::create_directories("out");
+        assert(res);
+    }
+    
 
-    haversine_json("out/pairs.json");
+    haversine_json("out/pairs.json", 10);
 }
