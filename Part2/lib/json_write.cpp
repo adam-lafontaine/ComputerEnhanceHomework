@@ -1,9 +1,6 @@
-#include <cmath>
 #include <iostream>
-#include <fstream>
 #include <random>
 #include <filesystem>
-#include <cassert>
 
 #include "lib.hpp"
 
@@ -49,22 +46,6 @@ static f64 scale_y(f64 val)
 }
 
 
-static void write_pair(std::ofstream& json, std::ofstream& ans, Gen& gen, Dist& dist_x, Dist& dist_y)
-{
-    f64 x0 = scale_x(dist_x(gen));
-    f64 y0 = scale_y(dist_y(gen));
-    f64 x1 = scale_x(dist_x(gen));
-    f64 y1 = scale_y(dist_y(gen));
-
-    json << "{\"X0\":" << x0 << ",\"Y0\":" << y0;
-    json << ",\"X1\":" << x1 << ",\"Y1\":" << y1 << "}";
-    json << ",";
-
-    auto result = haversine_earth(x0, y0, x1, y1);
-    ans.write((char*)(&result), sizeof(result));
-}
-
-
 void haversine_json(cstr out_dir, u32 n_pairs)
 {
     if(!fs::exists(out_dir))
@@ -81,12 +62,20 @@ void haversine_json(cstr out_dir, u32 n_pairs)
     RD rd {};
     Gen gen {rd()};
     
-    f64 sd = 0.03;    
+    f64 sd = 0.03;
+
+    f64 x0 = 0.0;
+    f64 y0 = 0.0;
+    f64 x1 = 0.0;
+    f64 y1 = 0.0;
 
     std::ofstream out(fs::path(out_dir) / "pairs.json", std::ios::out);
+    std::ofstream bin(fs::path(out_dir) / "pairs.bin", std::ios::app | std::ios::binary);
     std::ofstream ans(fs::path(out_dir) / "answers64.bin", std::ios::app | std::ios::binary);
 
     out << "{\"pairs\":[";
+
+    auto sz64 = sizeof(f64);
 
     for (u32 c = 0; c < n_clusters; ++c)
     {
@@ -95,7 +84,22 @@ void haversine_json(cstr out_dir, u32 n_pairs)
 
         for (u32 i = 0; i < n_pairs / n_clusters - 1; ++i)
         {
-            write_pair(out, ans, gen, dist_x, dist_y);
+            x0 = scale_x(dist_x(gen));
+            y0 = scale_y(dist_y(gen));
+            x1 = scale_x(dist_x(gen));
+            y1 = scale_y(dist_y(gen));
+
+            out << "{\"X0\":" << x0 << ",\"Y0\":" << y0;
+            out << ",\"X1\":" << x1 << ",\"Y1\":" << y1 << "}";
+            out << ",";
+
+            bin.write((char*)&x0, sz64);
+            bin.write((char*)&y0, sz64);
+            bin.write((char*)&x1, sz64);
+            bin.write((char*)&x1, sz64);
+
+            auto result = haversine_earth(x0, y0, x1, y1);
+            ans.write((char*)(&result), sz64);
         }
     }    
 
@@ -103,5 +107,6 @@ void haversine_json(cstr out_dir, u32 n_pairs)
 
     out << "]}";
     out.close();
+    bin.close();
     ans.close();
 }
