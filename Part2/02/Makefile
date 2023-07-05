@@ -3,7 +3,7 @@ GPP := g++-11
 build := ./build_files
 lib := ../lib
 
-exe := $(build)/run
+exe := $(build)/haversine
 
 
 # main
@@ -48,8 +48,11 @@ $(exe): $(object_files)
 
 build: $(exe)
 
-run: build
-	$(exe)
+run_gen: build
+	$(exe) --generate 100
+
+run_comp: build
+	$(exe) --compare
 
 clean:
 	rm -rfv $(build)/*

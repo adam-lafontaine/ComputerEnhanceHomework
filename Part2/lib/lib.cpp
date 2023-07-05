@@ -1,7 +1,9 @@
 #include <cmath>
 #include <fstream>
+#include <iostream>
 #include <cassert>
 #include <filesystem>
+#include <cstdio>
 
 namespace fs = std::filesystem;
 
@@ -55,4 +57,41 @@ namespace memory_buffer
 f64 haversine_earth(f64 X0, f64 Y0, f64 X1, f64 Y1)
 {
     return ReferenceHaversine(X0, Y0, X1, Y1, 6372.8);
+}
+
+
+void print_directory(cstr dir)
+{
+    for (auto const& entry : fs::directory_iterator(dir))
+    {
+        std::cout << entry.path() << '\n';
+    }
+}
+
+
+static void print(HavOut const& result)
+{
+    if (result.error)
+    {
+        printf("Error: %s", result.msg);
+    }
+    else
+    {
+        printf("   Input size: %lu\n", result.input_size);
+        printf("   Pair count: %u\n", result.input_count);
+        printf("Haversine avg: %lf\n", result.avg);
+    }
+}
+
+
+void print_results(HavOut const& result, HavOut const& ref)
+{
+    printf("JSON:\n");
+    print(result);
+
+    printf("\n");
+
+    printf("Validation:\n");
+    print(ref);
+    printf("Difference: %lf\n", (result.avg - ref.avg));
 }

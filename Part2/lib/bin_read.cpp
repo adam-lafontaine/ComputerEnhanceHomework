@@ -22,5 +22,7 @@ HavOut process_bin(cstr bin_path)
     result.avg = total / result.input_count;
     result.msg = "OK";
 
+    mb::destroy_buffer(buffer);
+
     return result;
 }

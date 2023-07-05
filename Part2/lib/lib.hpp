@@ -10,3 +10,7 @@ void haversine_json(cstr out_dir, u32 n_pairs);
 HavOut process_json(cstr json_path);
 
 HavOut process_bin(cstr bin_path);
+
+void print_directory(cstr dir);
+
+void print_results(HavOut const& result, HavOut const& ref);

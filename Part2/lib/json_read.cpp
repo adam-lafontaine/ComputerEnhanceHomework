@@ -1,6 +1,9 @@
 #include <cstring>
 
 
+constexpr f64 NOT_SET = -999.0;
+
+
 namespace
 {
     class State
@@ -10,10 +13,10 @@ namespace
 
         char* data = nullptr;
 
-        f64 x0 = 0.0;
-        f64 y0 = 0.0;
-        f64 x1 = 0.0;
-        f64 y1 = 0.0;
+        f64 x0 = NOT_SET;
+        f64 y0 = NOT_SET;
+        f64 x1 = NOT_SET;
+        f64 y1 = NOT_SET;
 
         f64 total = 0.0;
         u32 count = 0;
@@ -31,13 +34,19 @@ static int update(State& state, int offset)
         return offset;
     }
 
+    if (state.x0 == NOT_SET || state.y0 == NOT_SET || state.x1 == NOT_SET || state.y1 == NOT_SET)
+    {
+        state.error = "value not set";
+        return -1;
+    }
+
     ++state.count;
     state.total += haversine_earth(state.x0, state.y0, state.x1, state.y1);
 
-    state.x0 = 0.0;
-    state.y0 = 0.0;
-    state.x1 = 0.0;
-    state.y1 = 0.0;
+    state.x0 = NOT_SET;
+    state.y0 = NOT_SET;
+    state.x1 = NOT_SET;
+    state.y1 = NOT_SET;
 
     return offset;
 }
@@ -68,11 +77,11 @@ static int json_key_value(State& state, int offset)
         break;
 
     case 'Y':
-        key &= 0b001;
+        key |= 0b001;
         break;
 
     default:
-        key &= err;
+        key |= err;
     }
 
     ++offset;
@@ -83,11 +92,11 @@ static int json_key_value(State& state, int offset)
         break;
 
     case '1':
-        key &= 0b010;
+        key |= 0b010;
         break;
 
     default:
-        key &= err;
+        key |= err;
     }
 
     ++offset;
@@ -119,6 +128,7 @@ static int json_key_value(State& state, int offset)
     {
     case key_x0:
         state.x0 = value;
+        printf("%lf\n", value);
         break;
 
     case key_x1:
@@ -187,6 +197,7 @@ HavOut process_json(cstr json_path)
     }
 
     State state{};
+    state.data = buffer.data;
 
     int offset = 0;
     while (offset >= 0 && offset < buffer.size_)
@@ -204,6 +215,8 @@ HavOut process_json(cstr json_path)
         result.error = true;
         result.msg = state.error;
     }
+
+    mb::destroy_buffer(buffer);
 
     return result;
 }
