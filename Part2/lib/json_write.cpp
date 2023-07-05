@@ -1,10 +1,5 @@
 #include <iostream>
 #include <random>
-#include <filesystem>
-
-#include "lib.hpp"
-
-namespace fs = std::filesystem;
 
 
 using RD = std::random_device;
@@ -70,8 +65,8 @@ void haversine_json(cstr out_dir, u32 n_pairs)
     f64 y1 = 0.0;
 
     std::ofstream out(fs::path(out_dir) / "pairs.json", std::ios::out);
-    std::ofstream bin(fs::path(out_dir) / "pairs.bin", std::ios::app | std::ios::binary);
-    std::ofstream ans(fs::path(out_dir) / "answers64.bin", std::ios::app | std::ios::binary);
+    std::ofstream bin(fs::path(out_dir) / "pairs.bin", std::ios::binary);
+    std::ofstream ans(fs::path(out_dir) / "answers64.bin", std::ios::binary);
 
     out << "{\"pairs\":[";
 
