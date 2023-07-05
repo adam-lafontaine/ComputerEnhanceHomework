@@ -176,7 +176,15 @@ static int process_next(State& state, int offset)
 
 HavOut process_json(cstr json_path)
 {
+    HavOut result{};
+
     auto buffer = mb::read_buffer<char>(json_path);
+    if (!buffer.data)
+    {
+        result.error = true;
+        result.msg = "read error";
+        return result;
+    }
 
     State state{};
 
@@ -185,8 +193,7 @@ HavOut process_json(cstr json_path)
     {
         offset = process_next(state, offset);
     }
-
-    HavOut result{};
+    
     result.input_size = buffer.size_;
     result.input_count = state.count;
     result.msg = "OK";

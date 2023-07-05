@@ -22,4 +22,5 @@ public:
     f64 avg = 0.0;
 
     b32 error = false;
+    cstr msg = 0;
 };

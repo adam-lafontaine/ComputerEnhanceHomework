@@ -18,6 +18,7 @@ lib_dep += $(lib)/types.hpp
 lib_dep += $(lib)/listing_0065_haversine_formula.cpp
 lib_dep += $(lib)/json_write.cpp
 lib_dep += $(lib)/json_read.cpp
+lib_dep += $(lib)/bin_read.cpp
 
 lib_c := $(lib)/lib.cpp
 lib_o := $(build)/lib.o

@@ -49,6 +49,7 @@ namespace memory_buffer
 
 #include "json_write.cpp"
 #include "json_read.cpp"
+#include "bin_read.cpp"
 
 
 f64 haversine_earth(f64 X0, f64 Y0, f64 X1, f64 Y1)
