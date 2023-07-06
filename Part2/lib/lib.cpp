@@ -8,7 +8,6 @@
 namespace fs = std::filesystem;
 
 #include "lib.hpp"
-#include "listing_0065_haversine_formula.cpp"
 
 #include "memory_buffer.hpp"
 
@@ -48,10 +47,12 @@ namespace memory_buffer
 	}
 }
 
+#include "bin_read.cpp"
 
+#include "listing_0065_haversine_formula.cpp"
 #include "json_write.cpp"
 #include "json_read.cpp"
-#include "bin_read.cpp"
+
 
 
 f64 haversine_earth(f64 X0, f64 Y0, f64 X1, f64 Y1)
@@ -95,3 +96,7 @@ void print_results(HavOut const& result, HavOut const& ref)
     print(ref);
     printf("Difference: %lf\n", (result.avg - ref.avg));
 }
+
+
+#include "listing_0070_platform_metrics.cpp"
+#include "perf.cpp"
