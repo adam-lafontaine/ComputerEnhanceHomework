@@ -70,7 +70,7 @@ void print_directory(cstr dir)
 }
 
 
-static void print(HavOut const& result)
+void print(HavOut const& result)
 {
     if (result.error)
     {
@@ -100,3 +100,16 @@ void print_results(HavOut const& result, HavOut const& ref)
 
 #include "listing_0070_platform_metrics.cpp"
 #include "perf.cpp"
+
+
+void print(HavProf const& prof)
+{
+	auto const pct = [&](u64 n){ return (f64)n / prof.cpu_total * 100; };
+
+	printf("Total time: %lf ms (CPU freq %lu)\n", prof.total_ms, prof.cpu_freq);
+	printf("  Startup: %lu (%2.2f%%)\n", prof.cpu_startup, pct(prof.cpu_startup));
+	printf("     Read: %lu (%2.2f%%)\n", prof.cpu_read, pct(prof.cpu_read));
+	printf("    Setup: %lu (%2.2f%%)\n", prof.cpu_setup, pct(prof.cpu_setup));
+	printf("  Process: %lu (%2.2f%%)\n", prof.cpu_process, pct(prof.cpu_process));
+	printf("  Cleanup: %lu (%2.2f%%)\n", prof.cpu_cleanup, pct(prof.cpu_cleanup));
+}

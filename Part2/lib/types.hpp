@@ -24,3 +24,21 @@ public:
     b32 error = false;
     cstr msg = 0;
 };
+
+
+class HavProf
+{
+public:
+    u64 cpu_startup = 0;
+    u64 cpu_read = 0;
+    u64 cpu_setup = 0;
+    u64 cpu_process = 0;
+    u64 cpu_cleanup = 0;
+
+    u64 cpu_total = 0;
+    u64 os_total = 0;
+
+    u64 cpu_freq = 0;
+
+    f64 total_ms = 0.0;
+};

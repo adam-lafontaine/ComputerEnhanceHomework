@@ -16,4 +16,10 @@ namespace perf
     {
         return GetOSTimerFreq() * cpu_ticks / os_ticks;
     }
+
+
+    f64 est_ms(u64 os_ticks)
+    {
+        return 1000.0 * os_ticks / GetOSTimerFreq();
+    }
 }

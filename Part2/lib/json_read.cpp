@@ -219,3 +219,61 @@ HavOut process_json(cstr json_path)
 
     return result;
 }
+
+
+HavOut process_json(cstr json_path, HavProf& prof)
+{
+    auto startup = perf::cpu_ticks();
+
+    HavOut result{};
+
+    auto read = perf::cpu_ticks();
+
+    auto buffer = mb::read_buffer<char>(json_path);
+    if (!buffer.data)
+    {
+        result.error = true;
+        result.msg = "read error";
+        return result;
+    }
+
+    auto setup = perf::cpu_ticks();
+
+    State state{};
+    state.data = buffer.data;
+
+    int offset = 0;
+
+    auto process = perf::cpu_ticks();
+
+    while (offset >= 0 && offset < buffer.size_)
+    {
+        offset = process_next(state, offset);
+    }
+    
+    result.input_size = buffer.size_;
+    result.input_count = state.count;
+    result.msg = "OK";
+    result.avg = state.total / state.count;
+
+    auto cleanup = perf::cpu_ticks();
+
+    if (state.error)
+    {
+        result.error = true;
+        result.msg = state.error;
+    }
+
+    mb::destroy_buffer(buffer);
+
+    auto end = perf::cpu_ticks();
+
+    prof.cpu_startup = read - startup;
+    prof.cpu_read = setup - read;
+    prof.cpu_setup = process - setup;
+    prof.cpu_process = cleanup - process;
+    prof.cpu_cleanup = end - cleanup;
+    prof.cpu_total = end - startup;
+
+    return result;
+}
