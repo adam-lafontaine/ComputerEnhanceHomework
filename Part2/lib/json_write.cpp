@@ -1,4 +1,5 @@
 #include <random>
+#include <iomanip>
 
 
 using RD = std::random_device;
@@ -67,6 +68,8 @@ void haversine_json(cstr out_dir, u32 n_pairs)
     //std::ofstream bin(fs::path(out_dir) / "pairs.bin", std::ios::binary);
     std::ofstream ans(fs::path(out_dir) / "answers64.bin", std::ios::binary);
 
+    //char value_str[256] = { 0 };
+
     out << "{\"pairs\":[";
 
     auto sz64 = sizeof(f64);
@@ -83,14 +86,11 @@ void haversine_json(cstr out_dir, u32 n_pairs)
             x1 = scale_x(dist_x(gen));
             y1 = scale_y(dist_y(gen));
 
-            out << "{\"X0\":" << x0 << ",\"Y0\":" << y0;
-            out << ",\"X1\":" << x1 << ",\"Y1\":" << y1 << "}";
+            out << "{\"X0\":" << std::setprecision(20) << x0;
+            out << ",\"Y0\":" << std::setprecision(20) << y0;
+            out << ",\"X1\":" << std::setprecision(20) << x1;
+            out << ",\"Y1\":" << std::setprecision(20) << y1 << "}";
             out << ",";
-
-            /*bin.write((char*)&x0, sz64);
-            bin.write((char*)&y0, sz64);
-            bin.write((char*)&x1, sz64);
-            bin.write((char*)&x1, sz64);*/
 
             auto result = haversine_earth(x0, y0, x1, y1);
             ans.write((char*)(&result), sz64);

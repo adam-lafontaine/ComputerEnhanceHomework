@@ -128,19 +128,22 @@ static int json_key_value(State& state, int offset)
     {
     case key_x0:
         state.x0 = value;
-        printf("%lf\n", value);
+        
         break;
 
     case key_x1:
         state.x1 = value;
+        
         break;
 
     case key_y0:
         state.y0 = value;
+        
         break;
 
     case key_y1:
         state.y1 = value;
+        printf("%lf\n", value);
         break;
 
     default:
