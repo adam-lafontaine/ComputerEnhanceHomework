@@ -8,7 +8,6 @@
 namespace fs = std::filesystem;
 
 #include "lib.hpp"
-#include "listing_0065_haversine_formula.cpp"
 
 #include "memory_buffer.hpp"
 
@@ -48,10 +47,12 @@ namespace memory_buffer
 	}
 }
 
+#include "bin_read.cpp"
 
+#include "listing_0065_haversine_formula.cpp"
 #include "json_write.cpp"
 #include "json_read.cpp"
-#include "bin_read.cpp"
+
 
 
 f64 haversine_earth(f64 X0, f64 Y0, f64 X1, f64 Y1)
@@ -69,7 +70,7 @@ void print_directory(cstr dir)
 }
 
 
-static void print(HavOut const& result)
+void print(HavOut const& result)
 {
     if (result.error)
     {
@@ -94,4 +95,21 @@ void print_results(HavOut const& result, HavOut const& ref)
     printf("Validation:\n");
     print(ref);
     printf("Difference: %lf\n", (result.avg - ref.avg));
+}
+
+
+#include "listing_0070_platform_metrics.cpp"
+#include "perf.cpp"
+
+
+void print(HavProf const& prof)
+{
+	auto const pct = [&](u64 n){ return (f64)n / prof.cpu_total * 100; };
+
+	printf("Total time: %lf ms (CPU freq %lu)\n", prof.total_ms, prof.cpu_freq);
+	printf("  Startup: %lu (%2.2f%%)\n", prof.cpu_startup, pct(prof.cpu_startup));
+	printf("     Read: %lu (%2.2f%%)\n", prof.cpu_read, pct(prof.cpu_read));
+	printf("    Setup: %lu (%2.2f%%)\n", prof.cpu_setup, pct(prof.cpu_setup));
+	printf("  Process: %lu (%2.2f%%)\n", prof.cpu_process, pct(prof.cpu_process));
+	printf("  Cleanup: %lu (%2.2f%%)\n", prof.cpu_cleanup, pct(prof.cpu_cleanup));
 }
