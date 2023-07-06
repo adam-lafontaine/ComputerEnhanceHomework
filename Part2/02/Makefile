@@ -48,10 +48,13 @@ $(exe): $(object_files)
 
 build: $(exe)
 
-run_gen: build
+run: build
+	$(exe)
+
+gen: build
 	$(exe) --generate 1000000
 
-run_comp: build
+comp: build
 	$(exe) --compare
 
 clean:

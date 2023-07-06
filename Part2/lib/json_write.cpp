@@ -73,7 +73,7 @@ void haversine_json(cstr out_dir, u32 n_pairs)
     out << "{\"pairs\":[";
 
     constexpr auto sz64 = sizeof(f64);
-    constexpr int precision = 25;
+    constexpr int precision = 30;
 
     for (u32 c = 0; c < n_clusters; ++c)
     {
