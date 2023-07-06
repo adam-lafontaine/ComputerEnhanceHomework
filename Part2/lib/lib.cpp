@@ -1,24 +1,57 @@
 #include <cmath>
-#include <iostream>
 #include <fstream>
-#include <random>
-#include <filesystem>
+#include <iostream>
 #include <cassert>
+#include <filesystem>
+#include <cstdio>
 
 namespace fs = std::filesystem;
 
 #include "lib.hpp"
 #include "listing_0065_haversine_formula.cpp"
 
-using RD = std::random_device;
-using Gen = std::mt19937;
-using Dist = std::normal_distribution<f64>;
+#include "memory_buffer.hpp"
+
+namespace mb = memory_buffer;
 
 
-constexpr f64 X_MIN = -180.0;
-constexpr f64 X_MAX = 180.0;
-constexpr f64 Y_MIN = -90.0;
-constexpr f64 Y_MAX = 90.0;
+namespace memory_buffer
+{
+	template <typename T>
+	MemoryBuffer<T> read_buffer(fs::path const& path)
+	{
+		MemoryBuffer<T> buffer{};
+
+		auto size = fs::file_size(path);
+		auto n_elements = size / sizeof(T);
+
+		if (size == 0 || !mb::create_buffer(buffer, n_elements))
+		{
+			assert(false);
+			return buffer;
+		}
+		
+		std::ifstream file(path, std::ios::binary);
+		if (!file.is_open())
+		{
+			assert(false);
+			mb::destroy_buffer(buffer);
+			return buffer;
+		}
+
+		file.read((char*)buffer.data, size);
+		buffer.size_ = n_elements;
+
+		file.close();
+
+		return buffer;
+	}
+}
+
+
+#include "json_write.cpp"
+#include "json_read.cpp"
+#include "bin_read.cpp"
 
 
 f64 haversine_earth(f64 X0, f64 Y0, f64 X1, f64 Y1)
@@ -27,87 +60,38 @@ f64 haversine_earth(f64 X0, f64 Y0, f64 X1, f64 Y1)
 }
 
 
-static f64 wrap(f64 val)
+void print_directory(cstr dir)
 {
-    f64 i = 0.0;
-    f64 f = std::modf(val, &i);
-
-    if (f < 0.0)
+    for (auto const& entry : fs::directory_iterator(dir))
     {
-        f += 1.0;
+        std::cout << entry.path() << '\n';
     }
-
-    return f;
 }
 
 
-static f64 scale_x(f64 val)
+static void print(HavOut const& result)
 {
-    val = wrap(val);
-    return X_MIN + val * (X_MAX - X_MIN);
-}
-
-
-static f64 scale_y(f64 val)
-{
-    val = wrap(val);
-    return Y_MIN + val * (Y_MAX - Y_MIN);
-}
-
-
-static void write_pair(std::ofstream& json, std::ofstream& ans, Gen& gen, Dist& dist_x, Dist& dist_y)
-{
-    f64 x0 = scale_x(dist_x(gen));
-    f64 y0 = scale_y(dist_y(gen));
-    f64 x1 = scale_x(dist_x(gen));
-    f64 y1 = scale_y(dist_y(gen));
-
-    json << "{\"X0\":" << x0 << ",\"Y0\":" << y0;
-    json << ",\"X1\":" << x1 << ",\"Y1\":" << y1 << "}";
-    json << ",";
-
-    auto result = haversine_earth(x0, y0, x1, y1);
-    ans.write((char*)(&result), sizeof(result));
-}
-
-
-void haversine_json(cstr out_dir, u32 n_pairs)
-{
-    if(!fs::exists(out_dir))
+    if (result.error)
     {
-        auto res = fs::create_directories(out_dir);
-        assert(res);
+        printf("Error: %s", result.msg);
     }
-
-    constexpr u32 n_clusters = 10;
-
-    f64 x_means[10] = { 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9 };
-    f64 y_means[10] = { 0.5, 0.6, 0.7, 0.8, 0.9, 0.0, 0.1, 0.2, 0.3, 0.4 };
-
-    RD rd {};
-    Gen gen {rd()};
-    
-    f64 sd = 0.03;    
-
-    std::ofstream out(fs::path(out_dir) / "pairs.json", std::ios::out);
-    std::ofstream ans(fs::path(out_dir) / "answers64.bin", std::ios::app | std::ios::binary);
-
-    out << "{\"pairs\":[";
-
-    for (u32 c = 0; c < n_clusters; ++c)
+    else
     {
-        Dist dist_x { x_means[c], sd };
-        Dist dist_y { y_means[c], sd };
+        printf("   Input size: %lu\n", result.input_size);
+        printf("   Pair count: %u\n", result.input_count);
+        printf("Haversine avg: %lf\n", result.avg);
+    }
+}
 
-        for (u32 i = 0; i < n_pairs / n_clusters - 1; ++i)
-        {
-            write_pair(out, ans, gen, dist_x, dist_y);
-        }
-    }    
 
-    out.seekp(-1, std::ios_base::end);
+void print_results(HavOut const& result, HavOut const& ref)
+{
+    printf("JSON:\n");
+    print(result);
 
-    out << "]}";
-    out.close();
-    ans.close();
+    printf("\n");
+
+    printf("Validation:\n");
+    print(ref);
+    printf("Difference: %lf\n", (result.avg - ref.avg));
 }
