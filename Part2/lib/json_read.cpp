@@ -223,11 +223,11 @@ HavOut process_json(cstr json_path)
 
 HavOut process_json(cstr json_path, HavProf& prof)
 {
-    auto startup = perf::cpu_ticks();
+    auto startup = perf::cpu_read_ticks();
 
     HavOut result{};
 
-    auto read = perf::cpu_ticks();
+    auto read = perf::cpu_read_ticks();
 
     auto buffer = mb::read_buffer<char>(json_path);
     if (!buffer.data)
@@ -237,14 +237,14 @@ HavOut process_json(cstr json_path, HavProf& prof)
         return result;
     }
 
-    auto setup = perf::cpu_ticks();
+    auto setup = perf::cpu_read_ticks();
 
     State state{};
     state.data = buffer.data;
 
     int offset = 0;
 
-    auto process = perf::cpu_ticks();
+    auto process = perf::cpu_read_ticks();
 
     while (offset >= 0 && offset < buffer.size_)
     {
@@ -256,7 +256,7 @@ HavOut process_json(cstr json_path, HavProf& prof)
     result.msg = "OK";
     result.avg = state.total / state.count;
 
-    auto cleanup = perf::cpu_ticks();
+    auto cleanup = perf::cpu_read_ticks();
 
     if (state.error)
     {
@@ -266,7 +266,7 @@ HavOut process_json(cstr json_path, HavProf& prof)
 
     mb::destroy_buffer(buffer);
 
-    auto end = perf::cpu_ticks();
+    auto end = perf::cpu_read_ticks();
 
     prof.cpu_startup = read - startup;
     prof.cpu_read = setup - read;

@@ -60,12 +60,12 @@ void run()
 {
     HavProf prof{};
 
-    auto start = perf::os_ticks();
+    auto start = perf::os_read_ticks();
 
     auto result = process_json("out/pairs.json", prof);
 
-    prof.os_total = perf::os_ticks() - start;
-    prof.total_ms = perf::est_ms(prof.os_total);
+    prof.os_total = perf::os_read_ticks() - start;
+    prof.total_ms = perf::est_os_ms(prof.os_total);
     prof.cpu_freq = perf::est_cpu_freq(prof.cpu_total, prof.os_total);
 
     print(result);

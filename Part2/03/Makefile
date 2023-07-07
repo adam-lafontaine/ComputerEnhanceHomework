@@ -54,7 +54,7 @@ run: build
 	$(exe)
 
 gen: build
-	$(exe) --generate 1000000
+	$(exe) --generate 10000000
 
 comp: build
 	$(exe) --compare

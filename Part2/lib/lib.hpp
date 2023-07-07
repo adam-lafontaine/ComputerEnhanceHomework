@@ -20,13 +20,17 @@ void print_results(HavOut const& result, HavOut const& ref);
 
 namespace perf
 {
-    u64 os_ticks();
+    u64 os_read_ticks();
 
-    u64 cpu_ticks();
+    u64 cpu_read_ticks();
+
+    f64 est_os_ms(u64 os_ticks);
+
+    f64 est_cpu_ms(u64 cpu_ticks);
 
     u64 est_cpu_freq(u64 cpu_ticks, u64 os_ticks);
 
-    f64 est_ms(u64 os_ticks);
+    u64 est_cpu_freq();
 }
 
 
