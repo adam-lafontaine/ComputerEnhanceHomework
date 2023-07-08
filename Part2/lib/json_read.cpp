@@ -277,3 +277,55 @@ HavOut process_json(cstr json_path, HavProf& prof)
 
     return result;
 }
+
+
+HavOut process_json_profile(cstr json_path)
+{
+    HavOut result{};
+    MemoryBuffer<char> buffer;
+    State state{};
+
+{perf::Profile p(perf::ProfileLabel::Read);
+
+    buffer = mb::read_buffer<char>(json_path);
+    if (!buffer.data)
+    {
+        result.error = true;
+        result.msg = "read error";
+        return result;
+    }
+
+    
+    state.data = buffer.data;
+} // Read
+
+{perf::Profile p(perf::ProfileLabel::Process);
+
+    int offset = 0;
+    while (offset >= 0 && offset < buffer.size_)
+    {
+        offset = process_next(state, offset);
+    }
+
+} // Process
+
+{perf::Profile p(perf::ProfileLabel::Cleanup);
+    
+    result.input_size = buffer.size_;
+    result.input_count = state.count;
+    result.msg = "OK";
+    result.avg = state.total / state.count;
+
+    if (state.error)
+    {
+        result.error = true;
+        result.msg = state.error;
+    }
+
+    mb::destroy_buffer(buffer);
+} // Cleanup
+
+    perf::profile_report();
+
+    return result;
+}

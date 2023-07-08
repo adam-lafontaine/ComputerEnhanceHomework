@@ -8,8 +8,8 @@
 namespace fs = std::filesystem;
 
 #include "lib.hpp"
-
 #include "memory_buffer.hpp"
+#include "profiler.cpp"
 
 namespace mb = memory_buffer;
 
