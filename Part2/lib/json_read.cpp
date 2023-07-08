@@ -285,7 +285,7 @@ HavOut process_json_profile(cstr json_path)
     MemoryBuffer<char> buffer;
     State state{};
 
-    {perf::Profile p(perf::ProfileLabel::Read);
+{perf::Profile p(perf::ProfileLabel::Read);
 
     buffer = mb::read_buffer<char>(json_path);
     if (!buffer.data)
@@ -297,9 +297,9 @@ HavOut process_json_profile(cstr json_path)
 
     
     state.data = buffer.data;
-    } // Read
+} // Read
 
-    {perf::Profile p(perf::ProfileLabel::Process);
+{perf::Profile p(perf::ProfileLabel::Process);
 
     int offset = 0;
     while (offset >= 0 && offset < buffer.size_)
@@ -307,9 +307,9 @@ HavOut process_json_profile(cstr json_path)
         offset = process_next(state, offset);
     }
 
-    } // Process
+} // Process
 
-    {perf::Profile p(perf::ProfileLabel::Cleanup);
+{perf::Profile p(perf::ProfileLabel::Cleanup);
     
     result.input_size = buffer.size_;
     result.input_count = state.count;
@@ -323,7 +323,7 @@ HavOut process_json_profile(cstr json_path)
     }
 
     mb::destroy_buffer(buffer);
-    }
+} // Cleanup
 
     perf::profile_report();
 
