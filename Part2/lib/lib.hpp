@@ -21,6 +21,8 @@ HavOut process_json(cstr json_path, HavProf& prof);
 
 void print(HavProf const& prof);
 
+HavOut process_json_profile(cstr json_path);
+
 
 namespace perf
 {
@@ -36,5 +38,3 @@ namespace perf
 
     u64 est_cpu_freq();
 }
-
-#include "profiler.hpp"

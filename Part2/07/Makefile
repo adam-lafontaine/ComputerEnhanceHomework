@@ -21,6 +21,8 @@ lib_dep += $(lib)/json_read.cpp
 lib_dep += $(lib)/bin_read.cpp
 lib_dep += $(lib)/listing_0070_platform_metrics.cpp
 lib_dep += $(lib)/perf.cpp
+lib_dep += $(lib)/profiler.hpp
+lib_dep += $(lib)/profiler.cpp
 
 lib_c := $(lib)/lib.cpp
 lib_o := $(build)/lib.o

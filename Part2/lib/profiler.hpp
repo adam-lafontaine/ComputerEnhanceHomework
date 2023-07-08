@@ -4,8 +4,9 @@ namespace perf
 {
     enum class ProfileLabel : int
     {
-        f1,
-        f2,
+        Read,
+        Process,
+        Cleanup,
 
         Count,
         None = -1
@@ -18,8 +19,9 @@ namespace perf
 
         switch(label)
         {
-            case PL::f1: return "TODO";
-            case PL::f2: return "TODO";
+            case PL::Read: return "Read";
+            case PL::Process: return "Process";
+            case PL::Cleanup: return "Cleanup";
         }
 
         return "err";
